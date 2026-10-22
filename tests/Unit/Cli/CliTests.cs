@@ -386,6 +386,65 @@ public sealed class CliTests : TempBase
     }
 
     [Fact]
+    public void ReferenceDirWithSingleInputDirIsAUsageError()
+    {
+        // --reference-dir 只服务多输入合并——单输入给了必须拒（rc=2），
+        // 不许静默吞旋钮。
+        var dir = Temp("bundler-cli-ref1-").FullName;
+        var neutral = Temp("bundler-cli-ref1-n-").FullName;
+        var output = Temp("bundler-cli-ref1-out-").FullName;
+        try
+        {
+            Directory.CreateDirectory(dir);
+            Directory.CreateDirectory(neutral);
+            var (code, _, err) = Run(
+                "bundle", "--input-dir", dir,
+                "--reference-dir", neutral,
+                "--target", "macos-universal", "--formats", "zip",
+                "--product-name", "CliFixture", "--identifier", "dev.example.cli",
+                "--package-version", "1.0.0", "--main-executable", "cli-fixture",
+                "--output-dir", output);
+            Assert.True(code == 2, $"single-input --reference-dir must exit 2, got {code}: {err}");
+            Assert.Contains("--reference-dir", err);
+        }
+        finally
+        {
+            foreach (var d in new[] { dir, neutral, output })
+            {
+                if (Directory.Exists(d)) Directory.Delete(d, true);
+            }
+        }
+    }
+
+    [Fact]
+    public void MissingInputDirInMergeIsAUsageError()
+    {
+        // 合并路缺件输入目录与单输入校验同口径——rc=2 用法错，不是 rc=1 IO 失败。
+        var dir = Temp("bundler-cli-miss-in-").FullName;
+        var missing = TempPath("bundler-cli-miss-none");
+        var output = Temp("bundler-cli-miss-out-").FullName;
+        try
+        {
+            Directory.CreateDirectory(dir);
+            var (code, _, err) = Run(
+                "bundle", "--input-dir", dir, "--input-dir", missing,
+                "--target", "macos-universal", "--formats", "zip",
+                "--product-name", "CliFixture", "--identifier", "dev.example.cli",
+                "--package-version", "1.0.0", "--main-executable", "cli-fixture",
+                "--output-dir", output);
+            Assert.True(code == 2, $"missing merge input must exit 2, got {code}: {err}");
+            Assert.Contains("--input-dir", err);
+        }
+        finally
+        {
+            foreach (var d in new[] { dir, missing, output })
+            {
+                if (Directory.Exists(d)) Directory.Delete(d, true);
+            }
+        }
+    }
+
+    [Fact]
     public void MissingReferenceDirIsAUsageError()
     {
         // --reference-dir pointing nowhere must fail fast as a usage error (RC=2) rather

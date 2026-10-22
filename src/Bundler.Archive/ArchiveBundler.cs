@@ -26,6 +26,10 @@ public sealed class ArchiveBundler : IFormatBundler
         {
             throw new ArgumentNullException(nameof(bundle));
         }
+        if (bundle.Targets.Any(target => target is null))
+        {
+            throw new ArgumentException("Targets must not contain null elements.", nameof(bundle));
+        }
         // PackageFormat.Nsis == 0：不能用 FirstOrDefault(...)+ != default 判定。
         if (bundle.Targets.SelectMany(target => target.Formats).Any(
             format => format is not (PackageFormat.Zip or PackageFormat.TarGz)))

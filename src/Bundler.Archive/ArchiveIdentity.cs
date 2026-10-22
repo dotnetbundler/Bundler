@@ -22,13 +22,13 @@ internal static class ArchiveIdentity
     /// (<c>&lt;name&gt;-&lt;version&gt;-&lt;os&gt;-&lt;arch&gt;[-musl]</c> by default).
     /// </summary>
     internal static string ArchiveStem(
-        ArchiveBundleConfiguration settings, string packageName, string version, BundlePlanItem item)
+        ArchiveBundleConfiguration settings, string packageName, string version, BundleTarget target)
     {
         var stem = settings.ArchiveName ?? $"{packageName}-{version}-" +
-            (ArtifactNaming.ArchToken(item.Target, PackageFormat.Zip)
+            (ArtifactNaming.ArchToken(target, PackageFormat.Zip)
                 ?? throw new ArgumentException(
-                    $"Architecture '{item.Target.Architecture}' is not supported for archives.")) +
-            (item.Target.IsMusl ? "-musl" : "");
+                    $"Architecture '{target.Architecture}' is not supported for archives.")) +
+            (target.IsMusl ? "-musl" : "");
         ValidateStem(stem);
         return stem;
     }

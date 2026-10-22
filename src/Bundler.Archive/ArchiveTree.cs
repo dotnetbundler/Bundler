@@ -236,6 +236,13 @@ internal static class ArchiveTree
         {
             throw new ArgumentException($"BundlerArchiveFile source does not exist: '{source}'.");
         }
+        // fifo/设备/套接件 File.Exists 照收——fifo 会在写出期挂死、设备件
+        // 产出零字节归档条目，与 FreedesktopFiles.RequireExisting 同拒。
+        if (!UnixFileTypes.IsRegularFile(fullPath))
+        {
+            throw new ArgumentException(
+                $"BundlerArchiveFile source must be a regular file: '{source}'.");
+        }
         return fullPath;
     }
 

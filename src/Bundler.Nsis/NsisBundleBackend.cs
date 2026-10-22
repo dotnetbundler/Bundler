@@ -123,7 +123,7 @@ internal sealed class NsisBundleBackend(
         }
         catch
         {
-            TryDeleteFile(installerPath);
+            FileTree.TryDeleteFile(installerPath);
             throw;
         }
 
@@ -243,11 +243,6 @@ internal sealed class NsisBundleBackend(
         }
     }
 
-    private static void TryDeleteFile(string path)
-    {
-        try { if (File.Exists(path)) File.Delete(path); } catch { }
-    }
-
     internal static string CreateScript(
         string template,
         BundleConfiguration configuration,
@@ -290,6 +285,9 @@ internal sealed class NsisBundleBackend(
         var visualDirectives = CreateVisualDirectives(configuration.Icons, settings);
         var shortcuts = PrepareShortcuts(configuration, settings.Shortcuts, item, resources);
         var transaction = CreateTransactionRendering(configuration, shortcuts);
+        // 落进脚本/注册表的主执行体统一走归一形（\ 分隔、禁 . .. 段）——
+        // shortcut 图标与文件关联命令对同一文件必须写出同一字符串。
+        var mainExecutable = NormalizeTargetPath(item.MainExecutable);
 
         return TemplateRenderer.Render(template, new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -301,7 +299,7 @@ internal sealed class NsisBundleBackend(
             ["homepage"] = Escape(configuration.Homepage ?? string.Empty),
             ["copyright"] = Escape(copyright),
             ["identifier"] = Escape(configuration.Identifier),
-            ["main_executable"] = Escape(item.MainExecutable),
+            ["main_executable"] = Escape(mainExecutable),
             ["install_folder"] = Escape(safeProductName),
             ["install_mode"] = InstallModeName(settings.InstallScope),
             ["compression_directive"] = CompressionDirective(settings.Compression),
@@ -319,7 +317,7 @@ internal sealed class NsisBundleBackend(
             ["license_page"] = CreateLicensePage(configuration.LicenseFile),
             ["homepage_registry"] = CreateHomepageRegistry(configuration.Homepage),
             ["association_install_commands"] = CreateAssociationInstallCommands(configuration),
-            ["association_uninstall_commands"] = CreateAssociationUninstallCommands(configuration, item.MainExecutable),
+            ["association_uninstall_commands"] = CreateAssociationUninstallCommands(configuration, mainExecutable),
             ["installer_hooks_include"] = CreateInstallerHooksInclude(settings.InstallerHooksFile),
             ["shortcut_desktop_default"] = shortcuts.DesktopDefault ? "1" : "0",
             ["shortcut_start_menu_default"] = shortcuts.StartMenuDefault ? "1" : "0",
@@ -362,9 +360,25 @@ internal sealed class NsisBundleBackend(
             throw new InvalidOperationException("The NSIS signing work directory cannot contain a percent sign.");
         }
 
+        // 目标插值进双腿都用的双引号内：'"' 对 cmd/sh 都是破界字符，一律拒。
+        if (destinationPath.Contains('"'))
+        {
+            throw new InvalidOperationException(
+                "The NSIS signing work directory cannot contain a double quote.");
+        }
+        var onWindows = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+            System.Runtime.InteropServices.OSPlatform.Windows);
+        // POSIX 腿经 system() → /bin/sh -c——双引号内 `$`、反引号、`\` 仍展开/
+        // 吞引号（sh 注入面），与 ' % " 同判拒绝；Windows cmd 不吃这三个。
+        if (!onWindows && destinationPath.Any(c => c is '$' or '`' or '\\'))
+        {
+            throw new InvalidOperationException(
+                "The NSIS signing work directory cannot contain '$', '`' or '\\' " +
+                "on POSIX hosts (shell metacharacters).");
+        }
+
         var destination = Escape(destinationPath);
-        return System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
-            System.Runtime.InteropServices.OSPlatform.Windows)
+        return onWindows
             ? $"!uninstfinalize 'cmd.exe /D /C copy /Y \"%1\" \"{destination}\" >NUL'"
             : $"!uninstfinalize '/bin/cp \"%1\" \"{destination}\"'";
     }
@@ -1075,11 +1089,8 @@ internal sealed class NsisBundleBackend(
         .Replace("\r", " ")
         .Replace("\n", " ");
 
-    private static string SafeFileName(string value)
-    {
-        var result = WindowsFileNames.Sanitize(value).Trim();
-        return string.IsNullOrWhiteSpace(result) || result is "." or ".." ? "Application" : result;
-    }
+    private static string SafeFileName(string value) =>
+        WindowsFileNames.SafeFileName(value, "Application");
 
     private static string NumericVersion(string version)
     {

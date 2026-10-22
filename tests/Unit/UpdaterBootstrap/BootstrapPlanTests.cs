@@ -759,6 +759,110 @@ public sealed class BootstrapPlanTests : TempBase
     }
 
     [Fact]
+    public void PkgApply_Sweep_FlatStaleDir_Removed()
+    {
+        var tempRoot = Path.Combine(Root, "sweep-flat");
+        var stale = Path.Combine(tempRoot, "bundler-pkg-old");
+        Directory.CreateDirectory(stale);
+        File.WriteAllText(Path.Combine(stale, "app.deb"), "x");
+        Directory.SetLastWriteTimeUtc(stale, DateTime.UtcNow.AddHours(-25));
+
+        PkgApplyPlan.SweepStaleStageDirs(tempRoot);
+
+        Assert.False(Directory.Exists(stale));
+        Assert.False(Directory.Exists(stale + ".sweep-" + Environment.ProcessId));
+    }
+
+    [Fact]
+    public void PkgApply_Sweep_NestedDir_NotTraversed()
+    {
+        // 安全回归：暂存目内出现真目录（含 FUSE/bind 挂载形态）→整体弃收
+        // 不递归——旧 recursive=true 会把子目录树连锅端，root 侧跨界即
+        // 任意删除原语。弃收件被 mv 钉名，仍在 bundler-pkg* glob 面内。
+        var tempRoot = Path.Combine(Root, "sweep-nested");
+        var stale = Path.Combine(tempRoot, "bundler-pkg-deep");
+        var nested = Path.Combine(stale, "inner");
+        Directory.CreateDirectory(nested);
+        var victim = Path.Combine(nested, "victim.txt");
+        File.WriteAllText(victim, "keep");
+        File.WriteAllText(Path.Combine(stale, "app.deb"), "x");
+        Directory.SetLastWriteTimeUtc(stale, DateTime.UtcNow.AddHours(-25));
+
+        PkgApplyPlan.SweepStaleStageDirs(tempRoot);
+
+        // mv 钉名后弃收件活在 .sweep-<pid> 名下——原路径连同内件都必须幸存。
+        var held = stale + ".sweep-" + Environment.ProcessId;
+        Assert.False(Directory.Exists(stale));
+        Assert.True(File.Exists(Path.Combine(held, "inner", "victim.txt")));
+        Assert.True(Directory.Exists(held));
+    }
+
+    [Fact]
+    public void PkgApply_Sweep_SymlinkDir_LinkOnlyRemoved()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "目录链接创建在 Windows 需特权");
+        // 契约名目是链接：mv 钉名后复核链本体——只摘链不跟目标删件。
+        // 龄门对链取链自身 mtime（lstat 口径，sh find -P 同款），新建链恒新
+        // ——注入未来截点让本条确定性走"陈旧"分支。
+        var tempRoot = Path.Combine(Root, "sweep-link");
+        var victim = Path.Combine(tempRoot, "victim-dir");
+        Directory.CreateDirectory(victim);
+        var keep = Path.Combine(victim, "keep.txt");
+        File.WriteAllText(keep, "k");
+        var link = Path.Combine(tempRoot, "bundler-pkg.link");
+        Directory.CreateSymbolicLink(link, victim);
+
+        PkgApplyPlan.SweepStaleStageDirs(tempRoot, DateTime.UtcNow.AddHours(1));
+
+        Assert.False(Path.Exists(link));
+        Assert.True(File.Exists(keep));
+        Assert.True(Directory.Exists(victim));
+    }
+
+    [Fact]
+    public void PkgApply_Sweep_FreshLink_StaleTarget_LinkSurvives()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "目录链接创建在 Windows 需特权");
+        // 龄门按链自身 mtime（lstat）：链新目标旧→链不收——链接名目永不
+        // 被跟到目标上删件是安全契约，本断言反向钉住"不跟"语义。
+        var tempRoot = Path.Combine(Root, "sweep-freshlink");
+        var victim = Path.Combine(tempRoot, "victim-dir");
+        Directory.CreateDirectory(victim);
+        var keep = Path.Combine(victim, "keep.txt");
+        File.WriteAllText(keep, "k");
+        var link = Path.Combine(tempRoot, "bundler-pkg.link");
+        Directory.CreateSymbolicLink(link, victim);
+        Directory.SetLastWriteTimeUtc(victim, DateTime.UtcNow.AddHours(-25));
+
+        PkgApplyPlan.SweepStaleStageDirs(tempRoot);
+
+        Assert.True(Path.Exists(link));
+        Assert.True(File.Exists(keep));
+        Assert.True(Directory.Exists(victim));
+    }
+
+    [Fact]
+    public void DirWritableByCaller_RootCaller_ForeignOwnedDirPasses()
+    {
+        // musl 冒烟实证形态：容器内 euid=0、挂载宿主属主目录（uid≠0,0755）
+        // ——root 有 DAC 覆盖本就全域可写，刚性属主/o+wx 比对会误拒。
+        var foreign = new NativeMethods.FileStatus
+        {
+            Mode = 0x4000 | 0x1ED,   // S_IFDIR | 0755
+            Uid = 1001,
+        };
+        Assert.True(NativeMethods.DirWritableByCaller(foreign, 0L));
+        Assert.True(NativeMethods.CallerIsRoot(0L));
+        Assert.False(NativeMethods.CallerIsRoot(1000L));
+        Assert.False(NativeMethods.DirWritableByCaller(foreign, 1000L));
+        foreign.Mode = 0x4000 | 0x1F7;  // 0777：o+wx 公共区——非属主仍放行
+        Assert.True(NativeMethods.DirWritableByCaller(foreign, 1000L));
+        var notDir = foreign;
+        notDir.Mode = 0x8000 | 0x1F7;   // S_IFREG 冒充目录一律拒
+        Assert.False(NativeMethods.DirWritableByCaller(notDir, 0L));
+    }
+
+    [Fact]
     public void PkgApply_Deb_AptGetPreferred_DpkgFallback()
     {
         var pkg = WritePkg();
@@ -1203,10 +1307,13 @@ public sealed class BootstrapPlanTests : TempBase
     {
         var pkg = WritePkg();
         var app = WriteApp();
-        var passwd = WritePasswd("tester:x:4242:4343::/home/tester:/bin/sh\n");
+        // --log 属主复核要求"调用 uid==件/父目录属主"——PKEXEC_UID 须取真实
+        // euid 才过校验（Windows 无该判据按 4242，passwd/断言同步）。
+        var callerUid = CallerUid;
+        var passwd = WritePasswd($"tester:x:{callerUid}:4343::/home/tester:/bin/sh\n");
         var env = new Dictionary<string, string>
         {
-            ["PKEXEC_UID"] = "4242",
+            ["PKEXEC_UID"] = callerUid.ToString(),
             ["SUDO_GID"] = "4343",
             ["BUNDLER_UPDATER_PASSWD_FILE"] = passwd,
             ["DISPLAY"] = ":7",
@@ -1230,7 +1337,7 @@ public sealed class BootstrapPlanTests : TempBase
         Assert.Contains("no --env-file", log);
         // 最小集：降权场景 HOME 取目标用户 passwd 家目录而非 root 的 $HOME。
         Assert.Equal(
-            ["/stub/setpriv", "--reuid=4242", "--regid=4343", "--clear-groups",
+            ["/stub/setpriv", $"--reuid={callerUid}", "--regid=4343", "--clear-groups",
              "env", "HOME=/home/tester", "DISPLAY=:7", app],
             Assert.Single(_pkgSpawns).Args);
     }

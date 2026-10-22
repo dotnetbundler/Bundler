@@ -99,8 +99,8 @@ internal static class MacAppDesktopIntegration
 
             resolved.Add(new ResolvedDocumentType(
                 extensions, name, description,
-                entry.Role ?? MacAppTypeRole.Editor,
-                entry.Rank ?? MacAppHandlerRank.Default,
+                RequireDefined(entry.Role, MacAppTypeRole.Editor, $"{display}.role"),
+                RequireDefined(entry.Rank, MacAppHandlerRank.Default, $"{display}.rank"),
                 entry.ContentTypes, mimeType,
                 entry.ExportedTypeIdentifier, entry.ExportedTypeConformsTo));
         }
@@ -147,8 +147,9 @@ internal static class MacAppDesktopIntegration
                 consumed[sharedIndex] = true;
                 var shared = bundle.UrlProtocols[sharedIndex];
                 // 同 docType：共享 scheme 本条自有豁免、他占即拒。
-                foreach (var scheme in shared.Schemes)
+                foreach (var rawScheme in shared.Schemes)
                 {
+                    var scheme = (rawScheme ?? "").Trim();
                     if (!own.Contains(scheme) && !claimed.Add(scheme))
                     {
                         throw new ArgumentException(
@@ -156,11 +157,12 @@ internal static class MacAppDesktopIntegration
                             "is already declared by another URL type.");
                     }
                 }
-                schemes = schemes.Concat(shared.Schemes)
+                schemes = schemes.Concat(shared.Schemes.Select(s => (s ?? "").Trim()))
                     .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
                 name ??= shared.Name;
             }
-            resolved.Add(new ResolvedUrlType(schemes, name, entry.Role ?? MacAppTypeRole.Editor));
+            resolved.Add(new ResolvedUrlType(
+                schemes, name, RequireDefined(entry.Role, MacAppTypeRole.Editor, $"{display}.role")));
         }
 
         for (var index = 0; index < bundle.UrlProtocols.Count; index++)
@@ -171,7 +173,8 @@ internal static class MacAppDesktopIntegration
             }
             var shared = bundle.UrlProtocols[index];
             resolved.Add(new ResolvedUrlType(
-                shared.Schemes, shared.Name, MacAppTypeRole.Editor));
+                shared.Schemes.Select(s => (s ?? "").Trim()).ToArray(),
+                shared.Name, MacAppTypeRole.Editor));
         }
         return resolved;
     }
@@ -385,6 +388,13 @@ internal static class MacAppDesktopIntegration
 
     private static string NormalizeExtension(string extension) =>
         (extension ?? "").Trim().TrimStart('.');
+
+    // 枚举经可空位进配置——(Enum)999 强转不报错、ToString 会把 "999" 原样
+    // 写进 plist，验界后按默认/明示值取。
+    private static T RequireDefined<T>(T? value, T fallback, string display) where T : struct, Enum =>
+        value is null ? fallback
+        : Enum.IsDefined(typeof(T), value.Value) ? value.Value
+        : throw new ArgumentException($"{display}: invalid enum value '{value}'.");
 
     private static void RequireUti(string uti, string display)
     {

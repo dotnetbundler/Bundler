@@ -15,12 +15,15 @@ public sealed class PackageRoundTripTests : TempBase
 {
     private readonly string _input;
     private readonly string _output;
+    private readonly string _work;
 
     public PackageRoundTripTests()
     {
         _input = Path.Combine(Root, "input");
         _output = Path.Combine(Root, "out");
+        _work = Path.Combine(Root, "work");
         Directory.CreateDirectory(_input);
+        Directory.CreateDirectory(_work);
         File.WriteAllText(Path.Combine(_input, "sample"), "#!/bin/sh\necho hi\n");
         File.WriteAllText(Path.Combine(_input, "readme.txt"), "doc\n");
     }
@@ -47,7 +50,8 @@ public sealed class PackageRoundTripTests : TempBase
     {
         var result = DebPackageWriter.Build(
             Bundle(), Item(LinuxX64, PackageFormat.Deb),
-            new DebBundleConfiguration(), NullBundleLogger.Instance);
+            new DebBundleConfiguration(), _work, NullBundleLogger.Instance,
+            TestContext.Current.CancellationToken);
 
         Assert.EndsWith(".deb", result.OutputPath);
         Assert.Equal("sample", result.PackageName);
@@ -82,7 +86,8 @@ public sealed class PackageRoundTripTests : TempBase
     {
         var result = RpmPackageWriter.Build(
             Bundle(), Item(LinuxX64, PackageFormat.Rpm),
-            new RpmBundleConfiguration(), NullBundleLogger.Instance);
+            new RpmBundleConfiguration(), _work, NullBundleLogger.Instance,
+            TestContext.Current.CancellationToken);
 
         Assert.EndsWith(".rpm", result.OutputPath);
         Assert.Equal("sample", result.PackageName);
@@ -100,11 +105,81 @@ public sealed class PackageRoundTripTests : TempBase
     }
 
     [Fact]
+    public void Rpm_SymlinkSize_MatchesUtf8ByteCount()
+    {
+        // 非 ASCII 链接目标：FILESIZES/SIZE 必须与 cpio 体的 UTF-8 字节数一致，
+        // 不是 .NET 字符数——回归 Local Review 第7轮发现的字符/字节错位。
+        var nonAscii = "数据文件.so";
+        File.WriteAllText(Path.Combine(_input, nonAscii), "lib");
+        var link = Path.Combine(_input, "link.so");
+        try
+        {
+            File.CreateSymbolicLink(link, nonAscii);
+        }
+        catch
+        {
+            Assert.Skip("The host cannot create symlinks; link leg unverifiable.");
+        }
+
+        var result = RpmPackageWriter.Build(
+            Bundle(), Item(LinuxX64, PackageFormat.Rpm),
+            new RpmBundleConfiguration(), _work, NullBundleLogger.Instance,
+            TestContext.Current.CancellationToken);
+        var rpm = RpmPackageReader.Read(result.OutputPath);
+
+        var baseNames = rpm.Main.Strings(1117);   // BASENAMES
+        var sizes = rpm.Main.Ints(1028);          // FILESIZES
+        var index = Array.IndexOf(baseNames, "link.so");
+        Assert.True(index >= 0, "link.so must be in the rpm file manifest");
+        var expected = Encoding.UTF8.GetByteCount(nonAscii);
+        Assert.Equal(expected, sizes[index]);
+        // cpio 体字节数与 FILESIZES 必须同源一致
+        var payloadEntry = rpm.Payload.Single(e => e.Path.EndsWith("/link.so"));
+        Assert.Equal(expected, payloadEntry.Data.Length);
+    }
+
+    [Theory]
+    [InlineData(42L, 1009, 4)]                       // SIZE / INT32
+    [InlineData((long)int.MaxValue, 1009, 4)]        // 边界内仍走 SIZE
+    [InlineData((long)int.MaxValue + 1, 5009, 5)]    // 越界切 RPMTAG_LONGSIZE
+    [InlineData(3L * int.MaxValue, 5009, 5)]
+    public void Rpm_SizeEntry_LongVariantBeyondInt32(long size, int expectedTag, int expectedType)
+    {
+        // 单件 >2GiB 已在 AddFile 拒，但件数一多总和照样溢出——断言主头换
+        // RPM 4.15+ LONGSIZE 变体而非 checked 溢出。
+        var entry = RpmPackageWriter.SizeEntry(size);
+        Assert.Equal(expectedTag, entry.Tag);
+        Assert.Equal(expectedType, entry.Type);
+        if (expectedType == 5)
+        {
+            var decoded = 0L;
+            foreach (var b in entry.Data)
+            {
+                decoded = (decoded << 8) | b;
+            }
+            Assert.Equal(size, decoded);   // Pack64 大端
+        }
+    }
+
+    [Fact]
+    public void Rpm_HeaderRoundTrip_Int64TagDecodes()
+    {
+        // LONGSIZE 回读验证：type5 标签须解码为真实 long[]，不是占位零
+        var value = (long)int.MaxValue + 42;
+        var blob = RpmHeaderWriter.Write([RpmHeaderWriter.Int64s(5009, value)], 63);
+        var offset = 0;
+        var tags = RpmPackageReader.ParseHeader(blob, ref offset, 63);
+        var decoded = Assert.IsType<long[]>(tags[5009]);
+        Assert.Equal(value, decoded[0]);
+    }
+
+    [Fact]
     public void Apk_WriterReader_RoundTrip()
     {
         var result = ApkPackageWriter.Build(
             Bundle(), Item(LinuxX64, PackageFormat.AlpineApk),
-            new AlpineApkBundleConfiguration(), NullBundleLogger.Instance);
+            new AlpineApkBundleConfiguration(), _work, NullBundleLogger.Instance,
+            TestContext.Current.CancellationToken);
 
         Assert.EndsWith(".apk", result.Path);
 
@@ -138,7 +213,7 @@ public sealed class PackageRoundTripTests : TempBase
             {
                 Signing = new KeyFileSigningConfiguration { KeyFile = keyPath }
             },
-            NullBundleLogger.Instance);
+            _work, NullBundleLogger.Instance, TestContext.Current.CancellationToken);
 
         var streams = ApkPackageReader.SplitGzipStreams(File.ReadAllBytes(result.Path));
         Assert.Equal(3, streams.Count); // signature + control + data
@@ -160,6 +235,6 @@ public sealed class PackageRoundTripTests : TempBase
                         KeyFile = Path.Combine(Root, "nope.pem")
                     }
                 },
-                NullBundleLogger.Instance));
+                _work, NullBundleLogger.Instance, TestContext.Current.CancellationToken));
     }
 }

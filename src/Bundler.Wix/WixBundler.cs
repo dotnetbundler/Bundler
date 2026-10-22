@@ -21,6 +21,10 @@ public sealed class WixBundler : IFormatBundler
         {
             throw new ArgumentNullException(nameof(bundle));
         }
+        if (bundle.Targets.Any(target => target is null))
+        {
+            throw new ArgumentException("Targets must not contain null elements.", nameof(bundle));
+        }
         // 格式门先于宿主门——与全部兄弟后端统一：错格式永远 NotSupported。
         if (bundle.Targets.SelectMany(target => target.Formats).Any(format => format != PackageFormat.Msi))
         {
@@ -44,9 +48,26 @@ public sealed class WixBundler : IFormatBundler
         {
             var localeFile = _settings.LocaleFiles.FirstOrDefault(pair =>
                 pair.Key.Equals(language.Culture, StringComparison.OrdinalIgnoreCase)).Value;
+            var effectiveCodepage = _settings.EffectiveCodepage(language);
             if (localeFile is not null)
             {
-                WixLocale.ReadCallerStrings(localeFile, language, _settings.EffectiveCodepage(language));
+                WixLocale.ReadCallerStrings(localeFile, language, effectiveCodepage);
+            }
+            // 产品字段经 -d 进 wxs 后按各语言 MSI 码页编码——不可编码字符会让
+            // light 拒或静默 mojibake，与 UI 串校验同层拦在扇出前。
+            foreach (var (knob, value) in new[]
+            {
+                ("productName", bundle.ProductName),
+                ("publisher", bundle.Publisher),
+                ("description", bundle.Description)
+            })
+            {
+                if (value is { Length: > 0 } && !WixLocale.CanEncodeValue(value, effectiveCodepage))
+                {
+                    throw new ArgumentException(
+                        $"MSI {knob} '{value}' cannot be encoded in code page {effectiveCodepage} " +
+                        $"for language '{language.Culture}'.");
+                }
             }
         }
         if (!string.IsNullOrWhiteSpace(bundle.LicenseFile) &&

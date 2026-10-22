@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using DotNet.Bundler;
+using DotNet.Bundler.Core;
 
 namespace DotNet.Bundler.Wix;
 
@@ -571,21 +572,16 @@ internal sealed class WixProductDocument(WixBundleConfiguration settings, WixLan
         return index < 0 ? "" : path.Substring(0, index);
     }
 
-    internal static string SafeFileName(string name)
-    {
-        var invalid = Path.GetInvalidFileNameChars();
-        var safe = new string(name.Select(character => invalid.Contains(character) ? '_' : character).ToArray()).Trim();
-        return safe.Length == 0 ? "application" : safe;
-    }
+    internal static string SafeFileName(string name) =>
+        WindowsFileNames.SafeFileName(name, "application");
 
     private static string SafeShortcutName(string name)
     {
-        var safe = SafeFileName(name).TrimEnd('.', ' ');
+        // 快捷方式名遇保留名不整体回退（"CON app.lnk" 仍是可读名字）——
+        // 与 SafeFileName 的回退口径刻意不同。
+        var safe = WindowsFileNames.Sanitize(name).Trim().TrimEnd('.', ' ');
         if (safe.Length == 0) return "application";
-        var reserved = new[] { "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5",
-            "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6",
-            "LPT7", "LPT8", "LPT9" };
-        return reserved.Contains(safe, StringComparer.OrdinalIgnoreCase) ? safe + " app" : safe;
+        return WindowsFileNames.IsReservedDeviceName(safe) ? safe + " app" : safe;
     }
 
 }

@@ -26,6 +26,12 @@ public sealed class UpdateBlockMap
     /// <summary>对数据流按 blockSize 切块逐块 sha256，产出块表（流被读完，不重定位）。</summary>
     public static UpdateBlockMap Compute(Stream stream, int blockSize = DefaultBlockSize)
     {
+        // blockSize<=0 会在 ReadFull 产出全零趟静默吐出空块表——先判不藏坏值。
+        if (blockSize <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(blockSize), blockSize,
+                "blockSize must be positive.");
+        }
         var map = new UpdateBlockMap { BlockSize = blockSize };
         var buffer = new byte[blockSize];
         using var sha = SHA256.Create();

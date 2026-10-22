@@ -63,24 +63,36 @@ internal static class Dotnet
         return archive.Entries.Select(e => e.FullName).ToArray();
     }
 
-    public static void Restore(string project, IEnumerable<string> properties, string what)
-        => RestoreWithRetry(["restore", project, .. properties], what);
-
-    // NuGet 还原在共享 runner 上偶发连接层挂死（零输出卡到进程超时，
-    // CI windows-11-arm 实证一单挂满 10min）——restore 幂等，超时/非零退出有界重试。
-    // 挂死特征是打完 "Determining projects to restore..." 即零输出僵住：
-    // 3 分钟陪跑已给足正常还原十倍冗余，到点杀进程换枪（attemptTimeout 可显式覆盖；
-    // 本方法接管 options.Timeout——调用方传的 Timeout 不生效）。
+    // NuGet 还原在共享 runner 上偶发连接层挂死（零输出卡到进程超时——
+    // CI windows-11-arm 实证一单挂满 10min、verify run 39552269251 一次
+    // ~1.5h 劣化窗口 20/31 次 attempt 全超时）——三层缓解：
+    //   1) 统一注入 -p:NuGetAudit=false：audit 每次 restore 向每个 HTTP 源
+    //      拉漏洞数据（SDK10 默认 mode=all），是缓存命中路径上唯一保证
+    //      存在的网络触点，测试语境零价值；
+    //   2) IdleTimeout 看门狗：沉默即杀换枪（挂死签名是
+    //      "Determining projects to restore..." 后零输出僵住），
+    //      同预算内换枪次数翻倍。注意它判的是沉默不是进展——慢速
+    //      大下载/源重试出现 >阈值 零输出窗口同样被换枪且重试不续传，
+    //      "慢但活着的连接"可能比纯墙钟更早被判死：按幂等重来是有界
+    //      可回退的取舍（沉默即挂死签名，活跃下载进程极少全程安静
+    //      >75s），阈值勿再调低——看门狗与墙钟分工见 ProcessRunner.IdleTimeout；
+    //   3) 有界重试：restore 幂等，超时/非零退出换新进程。
+    // 本方法接管 options.Timeout/IdleTimeout——调用方传的这两项不生效
+    // （attemptTimeout/idleTimeout 可显式覆盖）。
     // 刻意失败的负例调用勿走此口：继续用 Run 单发，避免确定性失败陪跑重试。
     // BUNDLER_RESTORE_TRACE 置位时逐 attempt 落事件（BEGIN/SPAWN/EXIT/TIMEOUT/RETRY）：
     // "Determining projects" 后零输出卡到超时的取证面——只记 pid/attempt/rc/elapsed/
-    // 已有 what 标签，不落 argv/环境/输出（防秘密入档）。
+    // what/timeout/next-attempt 元数据，不落 argv/环境/输出（防秘密入档）。
     public static ProcessRunner.Result RestoreWithRetry(IEnumerable<string> args, string what,
-        ProcessRunner.Options? options = null, int maxAttempts = 4,
-        TimeSpan? attemptTimeout = null)
+        ProcessRunner.Options? options = null, int maxAttempts = 6,
+        TimeSpan? attemptTimeout = null, TimeSpan? idleTimeout = null)
     {
         options ??= new ProcessRunner.Options();
         options.Timeout = attemptTimeout ?? TimeSpan.FromMinutes(3);
+        options.IdleTimeout = idleTimeout ?? TimeSpan.FromSeconds(75);
+        // 统一关 audit——见上头注第 1 条；追加在调用方 -p 之后亦无害（后写胜）。
+        var argv = args.ToList();
+        argv.Add("-p:NuGetAudit=false");
         var tracePath = Environment.GetEnvironmentVariable("BUNDLER_RESTORE_TRACE");
         var tracing = !string.IsNullOrEmpty(tracePath);
         var originalStarted = options.ProcessStarted;
@@ -103,7 +115,7 @@ internal static class Dotnet
                     $"BEGIN pid={Environment.ProcessId} what=\"{what}\" attempt={attempt}/{maxAttempts} timeout={options.Timeout.TotalSeconds:F0}s");
                 try
                 {
-                    var result = Run(args, options);
+                    var result = Run(argv, options);
                     var elapsed = (DateTime.UtcNow - attemptStart).TotalSeconds;
                     TraceRestore(tracePath, $"EXIT rc={result.ExitCode} elapsed={elapsed:F1}s attempt={attempt}");
                     if (result.ExitCode == 0)

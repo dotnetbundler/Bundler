@@ -33,10 +33,14 @@ internal sealed class MacPkgBundleBackend(MacPkgBundleConfiguration settings) : 
             throw new ArgumentException("The .pkg version must not be empty.");
         }
         var installRoot = settings.InstallRoot;
-        if (!installRoot.StartsWith("/", StringComparison.Ordinal))
+        // POSIX 绝对路径：只认 '/' 分隔；"\"、空段、'.'/'..' 段都拒——
+        // install-location 进 pkgbuild CLI 与安装器，畸形段会落到错误目录。
+        if (!installRoot.StartsWith("/", StringComparison.Ordinal) ||
+            installRoot.IndexOf('\\') >= 0 ||
+            installRoot.Split('/').Any(segment => segment is "." or ".."))
         {
             throw new ArgumentException(
-                $"The .pkg install location must be an absolute path: '{installRoot}'.");
+                $"The .pkg install location must be an absolute POSIX path without '.'/'..' segments: '{installRoot}'.");
         }
 
         MacPkgSigning.Validate(settings.Signing);

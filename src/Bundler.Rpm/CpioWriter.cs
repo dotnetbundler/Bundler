@@ -30,11 +30,13 @@ internal static class CpioWriter
     }
 
     /// <summary>流式写出：载荷大时直接写目标流（如 gzip→文件），不经内存整档。</summary>
-    internal static void Write(Stream output, IReadOnlyList<Entry> entries)
+    internal static void Write(Stream output, IReadOnlyList<Entry> entries,
+        CancellationToken cancellationToken = default)
     {
         foreach (var entry in entries)
         {
-            WriteEntry(output, entry);
+            cancellationToken.ThrowIfCancellationRequested();
+            WriteEntry(output, entry, cancellationToken);
         }
 
         WriteRecord(output, "TRAILER!!!", 0, 0, 1, 0, [], writeData: false);
@@ -42,7 +44,7 @@ internal static class CpioWriter
         output.Write(new byte[pad], 0, pad);
     }
 
-    private static void WriteEntry(Stream output, Entry entry)
+    private static void WriteEntry(Stream output, Entry entry, CancellationToken cancellationToken)
     {
         var isSymlink = (entry.Mode & 0xF000) == 0xA000;
         var isDir = (entry.Mode & 0xF000) == 0x4000;
@@ -66,7 +68,7 @@ internal static class CpioWriter
                 fileSize = 0;
             }
             WriteRecord(output, entry.Name, entry.Mode, entry.Inode, isDir ? 2 : 1,
-                fileSize, entry.Data, contentStream, isSymlink || !isDir);
+                fileSize, entry.Data, contentStream, isSymlink || !isDir, cancellationToken);
         }
         finally
         {
@@ -76,7 +78,8 @@ internal static class CpioWriter
 
     private static void WriteRecord(
         Stream output, string name, int mode, int inode, int nlink,
-        int fileSize, byte[] data, Stream? dataStream = null, bool writeData = true)
+        int fileSize, byte[] data, Stream? dataStream = null, bool writeData = true,
+        CancellationToken cancellationToken = default)
     {
         var nameBytes = Encoding.UTF8.GetBytes(name);
         var header = new StringBuilder();
@@ -105,6 +108,7 @@ internal static class CpioWriter
                 var buffer = new byte[81920];
                 while (remaining > 0)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var read = dataStream.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
                     if (read == 0)
                     {

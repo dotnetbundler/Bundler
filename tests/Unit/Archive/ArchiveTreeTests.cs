@@ -190,13 +190,13 @@ public sealed class ArchiveTreeTests : TempBase
         var input = Path.Combine(Root, "in8");
         Directory.CreateDirectory(input);
         var item = Item(input);
-        var stem = ArchiveIdentity.ArchiveStem(Settings(), "sample-app", "1.0.0", item);
+        var stem = ArchiveIdentity.ArchiveStem(Settings(), "sample-app", "1.0.0", item.Target);
         Assert.Equal("sample-app-1.0.0-linux-x86_64", stem);
         var named = ArchiveIdentity.ArchiveStem(
             new ArchiveBundleConfiguration { ArchiveName = "release.tar" },
-            "sample-app", "1.0.0", item);
+            "sample-app", "1.0.0", item.Target);
         Assert.Equal("release.tar", named);
         Assert.Throws<ArgumentException>(() => ArchiveIdentity.ArchiveStem(
-            new ArchiveBundleConfiguration { ArchiveName = "a/b" }, "p", "1", item));
+            new ArchiveBundleConfiguration { ArchiveName = "a/b" }, "p", "1", item.Target));
     }
 }

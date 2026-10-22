@@ -64,12 +64,25 @@ public static class UpdaterBootstrapParityTests
         // stdout/stderr 异步消费：任一管道写满未消费会把子进程卡在写端。
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
+        // WaitAll 带时限兜底——Kill 不杀进程树，孙进程继承管道会让
+        // ReadToEndAsync 无 EOF 悬挂（超时 kill 腿恰是最需要现场的形态）。
         if (!process.WaitForExit(60_000))
         {
             try { process.Kill(); } catch (InvalidOperationException) { }
+            Task.WaitAll([stdout, stderr], TimeSpan.FromSeconds(5));
+            if (stderr.IsCompletedSuccessfully && !string.IsNullOrEmpty(stderr.Result))
+            {
+                Console.Error.Write(stderr.Result);
+            }
             Assert.Fail("bundler-updater.sh did not exit within 60s");
         }
         Task.WaitAll(stdout, stderr);
+        // sh 腿 stderr 回显进 CI 日志——失败断言前 sh 的拒因静默吞掉难定位
+        //（Aot 腿 Console.Error 本就实时可见，本侧对等口径）。
+        if (!string.IsNullOrEmpty(stderr.Result))
+        {
+            Console.Error.Write(stderr.Result);
+        }
         return process.ExitCode;
     }
 
@@ -640,9 +653,18 @@ public static class UpdaterBootstrapParityTests
             if (!process.WaitForExit(60_000))
             {
                 try { process.Kill(); } catch (InvalidOperationException) { }
+                Task.WaitAll([stdout, stderr], TimeSpan.FromSeconds(5));
+                if (stderr.IsCompletedSuccessfully && !string.IsNullOrEmpty(stderr.Result))
+                {
+                    Console.Error.Write(stderr.Result);
+                }
                 Assert.Fail("updater bootstrapper did not exit within 60s");
             }
             Task.WaitAll(stdout, stderr);
+            if (!string.IsNullOrEmpty(stderr.Result))
+            {
+                Console.Error.Write(stderr.Result);
+            }
             Assert.Equal(0, process.ExitCode);
                 AssertTree(expected, install);
         }
@@ -1370,6 +1392,8 @@ public static class UpdaterBootstrapParityTests
     // 属 --sha256 复核的退化链（全缺席时 sh 支路按"无法核验"拒——同样属
     // 协议内行为差异，须按宿主可用性对断言而非照单全收）；find 属
     // bundler-pkg.* 残件清扫（缺席即跳过——协议允许）。
+    // lsof 刻意不入白名单——fd 钉住的 devfs 兜底在协议内按知名绝对位
+    //（/usr/sbin/lsof 等）自解析，不依赖 PATH（最小 env 是真实生产形态）。
     static void SeedShim(string shim)
     {
         foreach (var tool in new[] { "env", "dirname", "awk", "ls", "sed", "nohup", "tr", "rm", "rmdir",
@@ -1551,9 +1575,18 @@ public static class UpdaterBootstrapParityTests
         if (!process.WaitForExit(60_000))
         {
             try { process.Kill(); } catch (InvalidOperationException) { }
+            Task.WaitAll([stdout, stderr], TimeSpan.FromSeconds(5));
+            if (stderr.IsCompletedSuccessfully && !string.IsNullOrEmpty(stderr.Result))
+            {
+                Console.Error.Write(stderr.Result);
+            }
             Assert.Fail("bundler-updater.sh pkg-apply did not exit within 60s");
         }
         Task.WaitAll(stdout, stderr);
+        if (!string.IsNullOrEmpty(stderr.Result))
+        {
+            Console.Error.Write(stderr.Result);
+        }
         return process.ExitCode;
     }
 
@@ -2501,6 +2534,280 @@ public static class UpdaterBootstrapParityTests
                 var lines = WaitRecord(rec, 2);
                 Assert.StartsWith("app|pwd=" + dir, lines[1]);
                 Assert.Contains("MYVAR=ok", lines[1]);
+            }
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
+    static void PkgApply_EnvFileRejected_NotDeleted_Parity()
+    {
+        // SEC 回归：校验被拒的 --env-file 节点必须仍在——旧 finally 无条件
+        // CleanupEnvFile 会把 rc3 拒绝变成"提权删调用方任意件"原语
+        //（AOT envFileRead / sh _PA_ENV_OK 读定闸双侧同口径）。
+        Assert.SkipWhen(TestPlatform.IsWindows, "pkg-apply real-exec parity legs run on POSIX hosts");
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "envnd-" + impl);
+                var bin = NewDir(dir, "bin");
+                var shim = NewDir(dir, "shim");
+                SeedShim(shim);
+                var rec = Path.Combine(dir, "rec.txt");
+                var pkg = Write(Path.Combine(dir, "app-2.0-1.deb"), "pkg-bytes");
+                var app = AppStub(dir, rec);
+                var env = PkgEnv(
+                    ("BUNDLER_UPDATER_CMD_DPKG", PmStub(bin, "dpkg", 0, rec)));
+
+                // 目录件：-f 拒 → rc3 → 目录节点仍在
+                var dirEnv = NewDir(dir, "notafile-" + impl);
+                Assert.Equal(3, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                    "--env-file", dirEnv));
+                Assert.True(Directory.Exists(dirEnv), "被拒的目录件不得被清件兜底删除");
+
+                // 异主普通件（调用 uid=euid+1）：rc3 → 件仍在
+                var wrongUid = (long.Parse(CurrentUserUid()) + 1).ToString();
+                var wrongEnv = Write(Path.Combine(dir, "wrong.env"), "DISPLAY=:9\n");
+                env["PKEXEC_UID"] = wrongUid;
+                Assert.Equal(3, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                    "--env-file", wrongEnv));
+                Assert.True(File.Exists(wrongEnv), "异主被拒件不得被清件兜底删除");
+                env.Remove("PKEXEC_UID");
+
+                // 符号链接：rc3 → 链接节点仍在（目标自然不动）
+                var target = Write(Path.Combine(dir, "real.env"), "MYVAR=leak\n");
+                var link = Path.Combine(dir, "linked-" + impl + ".env");
+                File.CreateSymbolicLink(link, target);
+                Assert.Equal(3, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                    "--env-file", link));
+                Assert.True(File.Exists(link), "被拒的链接节点不得被清件兜底删除");
+                Assert.True(File.Exists(target));
+            }
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
+    static void PkgApply_EnvFileFifo_Rc3_Parity()
+    {
+        // fifo 件：sh exec 3<> RDWR 立即返回不阻塞 / AOT OpenWithDeadline
+        // 5s 线程收口——两侧同归 rc3 不挂死，节点仍在。
+        Assert.SkipWhen(TestPlatform.IsWindows, "pkg-apply real-exec parity legs run on POSIX hosts");
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "envfifo-" + impl);
+                var bin = NewDir(dir, "bin");
+                var shim = NewDir(dir, "shim");
+                SeedShim(shim);
+                var rec = Path.Combine(dir, "rec.txt");
+                var pkg = Write(Path.Combine(dir, "app-2.0-1.deb"), "pkg-bytes");
+                var app = AppStub(dir, rec);
+                var fifo = Path.Combine(dir, "pipe-" + impl + ".env");
+                using (var mk = TestProc.Start(new ProcessStartInfo(PkgRealTool("mkfifo"), fifo)
+                { UseShellExecute = false }) ?? throw new InvalidOperationException("mkfifo spawn timed out"))
+                {
+                    Assert.True(mk.WaitForExit(30_000) && mk.ExitCode == 0, "mkfifo failed");
+                }
+                var env = PkgEnv(
+                    ("BUNDLER_UPDATER_CMD_DPKG", PmStub(bin, "dpkg", 0, rec)));
+
+                Assert.Equal(3, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                    "--env-file", fifo));
+                Assert.True(File.Exists(fifo), "被拒的 fifo 节点不得被清件兜底删除");
+            }
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
+    static void PkgApply_Log_Rejected_Rc3_Parity()
+    {
+        // SEC 回归：--log 写路径按"调用者可写"复核（装包前拒 rc3，pm 零调用，
+        // 目标件零字节零改动）——异主既有件 / 符号链接 / 父目录非调用者可写
+        // 三变体同拒（AOT OpenLogFile / sh _pa_log_open 双侧同口径）。
+        Assert.SkipWhen(TestPlatform.IsWindows, "pkg-apply real-exec parity legs run on POSIX hosts");
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "logrej-" + impl);
+                var bin = NewDir(dir, "bin");
+                var shim = NewDir(dir, "shim");
+                SeedShim(shim);
+                var rec = Path.Combine(dir, "rec.txt");
+                var pkg = Write(Path.Combine(dir, "app-2.0-1.deb"), "pkg-bytes");
+                var app = AppStub(dir, rec);
+                var wrongUid = (long.Parse(CurrentUserUid()) + 1).ToString();
+                var env = PkgEnv(
+                    ("BUNDLER_UPDATER_CMD_DPKG", PmStub(bin, "dpkg", 0, rec)),
+                    ("PKEXEC_UID", wrongUid));
+
+                // 既有件属 euid，调用 uid=euid+1 → 属主不符拒；件零改动
+                var logFile = Write(Path.Combine(dir, "u-" + impl + ".log"), "seed\n");
+                Assert.Equal(3, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                    "--log", logFile));
+                Assert.Equal("seed\n", File.ReadAllText(logFile));
+
+                // 符号链接：换件窗形状——拒
+                var target = Write(Path.Combine(dir, "real.log"), "seed\n");
+                var link = Path.Combine(dir, "linked-" + impl + ".log");
+                File.CreateSymbolicLink(link, target);
+                Assert.Equal(3, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                    "--log", link));
+                Assert.Equal("seed\n", File.ReadAllText(target));
+
+                // 件不在 + 父目录非调用者可写（/etc 属 root 且非 o+wx）：拒且不建件
+                var sysLog = "/etc/bundler-parity-should-not-exist.log";
+                Assert.Equal(3, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                    "--log", sysLog));
+                Assert.False(File.Exists(sysLog), "父目录复核拒绝后不得建出日志件");
+            }
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
+    static void PkgApply_Log_NewlineInjection_SingleLine_Parity()
+    {
+        // SEC 回归：包路径内嵌 \n 的调用方串进日志前折空格——日志件每行
+        // 都必须以 bundler-updater: 起头，不存在注入裸行（伪造记录面收口；
+        // sh tr '\r\n' '  ' / AOT SanitizeLogLine 双侧同口径）。
+        Assert.SkipWhen(TestPlatform.IsWindows, "pkg-apply real-exec parity legs run on POSIX hosts");
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "lognl-" + impl);
+                var bin = NewDir(dir, "bin");
+                var shim = NewDir(dir, "shim");
+                SeedShim(shim);
+                var rec = Path.Combine(dir, "rec.txt");
+                var pkg = Write(Path.Combine(dir, "app\ninjected.deb"), "pkg-bytes");
+                var app = AppStub(dir, rec);
+                var log = Path.Combine(dir, "u-" + impl + ".log");
+                var env = PkgEnv(
+                    ("BUNDLER_UPDATER_CMD_DPKG", PmStub(bin, "dpkg", 0, rec)));
+
+                Assert.Equal(0, InvokePkg(impl, env, shim,
+                    "pkg-apply", "--pkg", pkg, "--format", "deb", "--app", app,
+                    "--log", log));
+                var lines = File.ReadAllLines(log);
+                Assert.NotEmpty(lines);
+                foreach (var line in lines)
+                {
+                    Assert.StartsWith("bundler-updater:", line);
+                }
+                Assert.Contains(lines, l => l.Contains("install '") && l.Contains("app injected.deb"));
+            }
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
+    static void Apply_Log_MissingParent_WarnContinues_Parity()
+    {
+        // apply 动词同款 --log 两级口径：父目录不存在=良性不可写 → WARN
+        // 降级续行 rc0（日志是留痕辅助不阻断换包；pkg-apply 的
+        // UnwritableLog 变体同契约），日志件不得落盘。
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "applog-" + impl);
+                var install = NewDir(dir, "install");
+                Write(Path.Combine(install, "app"), "old");
+                var payload = NewDir(dir, "payload");
+                Write(Path.Combine(payload, "app"), "x");
+                var badLog = Path.Combine(dir, "no-such-dir", "u.log");
+
+                Assert.Equal(0, Invoke(impl,
+                    "apply", "--install-dir", install, "--payload", payload,
+                    "--log", badLog));
+                Assert.Equal("x", File.ReadAllText(Path.Combine(install, "app")));
+                Assert.False(File.Exists(badLog), "未验证路径不得建出日志件");
+            }
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
+    static void Apply_Log_Symlink_Rejected_Rc2_Parity()
+    {
+        // apply 违规腿：符号链接路径是换件窗违规 → 用法错 rc2 硬拒
+        //（dangling 同拒——sh -h 判存在、AOT NOFOLLOW→ELOOP 双收口）。
+        Assert.SkipWhen(TestPlatform.IsWindows, "symlink log rejection needs POSIX link semantics");
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "apploglink-" + impl);
+                var install = NewDir(dir, "install");
+                Write(Path.Combine(install, "app"), "old");
+                var payload = NewDir(dir, "payload");
+                Write(Path.Combine(payload, "app"), "x");
+
+                var target = Write(Path.Combine(dir, "real.log"), "seed\n");
+                var link = Path.Combine(dir, "linked.log");
+                File.CreateSymbolicLink(link, target);
+                Assert.Equal(2, Invoke(impl,
+                    "apply", "--install-dir", install, "--payload", payload,
+                    "--log", link));
+                Assert.Equal("seed\n", File.ReadAllText(target));
+
+                var dangling = Path.Combine(dir, "dangling.log");
+                File.CreateSymbolicLink(dangling, Path.Combine(dir, "ghost.log"));
+                Assert.Equal(2, Invoke(impl,
+                    "apply", "--install-dir", install, "--payload", payload,
+                    "--log", dangling));
+                Assert.False(File.Exists(Path.Combine(dir, "ghost.log")),
+                    "dangling 链接不得被跟随建件");
+            }
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
+    static void Apply_Log_NewlineInjection_SingleLine_Parity()
+    {
+        // apply 腿同款注入收口：安装路径内嵌 \n——日志行同样全带
+        // bundler-updater: 前缀（apply 的 log() 走同一 CreateLog/tr 面）。
+        // \n 路径名 POSIX-only（Windows 文件系统禁换行符，注入面本不存在）。
+        Assert.SkipWhen(TestPlatform.IsWindows, "newline-bearing paths are POSIX-only");
+        var root = CreateTempDirectory();
+        try
+        {
+            foreach (var impl in Impls)
+            {
+                var dir = NewDir(root, "applognl-" + impl);
+                // 换包语义要求装位已存在——\n 名 POSIX 合法，Directory.CreateDirectory 照建。
+                var install = NewDir(dir, "ins\ntall");
+                var payload = NewDir(dir, "payload");
+                Write(Path.Combine(payload, "app"), "x");
+                var log = Path.Combine(dir, "u-" + impl + ".log");
+
+                Assert.Equal(0, Invoke(impl,
+                    "apply", "--install-dir", install, "--payload", payload,
+                    "--log", log));
+                foreach (var line in File.ReadAllLines(log))
+                {
+                    Assert.StartsWith("bundler-updater:", line);
+                }
             }
         }
         finally { Cleanup(root); }

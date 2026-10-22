@@ -48,26 +48,46 @@ internal static class TarWriter
     // package-contains-ancient-file) flag dates at/below the mid-70s.
     internal const long EntryMtime = 315532800L;
 
-    internal static void Write(Stream output, IEnumerable<TarEntry> entries) =>
-        Write(output, entries, omitEndOfArchive: false);
+    internal static void Write(Stream output, IEnumerable<TarEntry> entries,
+        CancellationToken cancellationToken = default) =>
+        Write(output, entries, omitEndOfArchive: false, permitPaxLinkpath: false, cancellationToken);
 
     /// <summary>
     /// Writes the entries; <paramref name="omitEndOfArchive"/> drops the final
     /// pair of zero blocks for tar fragments that continue inside a larger
     /// container (apk signature/control gzip streams never carry the end marker).
+    /// <paramref name="permitPaxLinkpath"/> opts into emitting a pax
+    /// <c>linkpath</c> extended header for link targets beyond the 100-byte
+    /// ustar limit; without it such targets keep the historical loud-fail —
+    /// dpkg's data.tar parser rejects 'x' headers outright, so .deb must not opt in.
     /// </summary>
-    internal static void Write(Stream output, IEnumerable<TarEntry> entries, bool omitEndOfArchive)
+    internal static void Write(Stream output, IEnumerable<TarEntry> entries, bool omitEndOfArchive,
+        bool permitPaxLinkpath = false, CancellationToken cancellationToken = default)
     {
         var header = new byte[512];
         var zeroBlock = new byte[512];
         var copyBuffer = new byte[81920];
         foreach (var entry in entries)
         {
-            if (entry.PaxRecords is { Count: > 0 } paxRecords)
+            cancellationToken.ThrowIfCancellationRequested();
+            var paxRecords = entry.PaxRecords;
+            if (permitPaxLinkpath &&
+                entry.Kind == TarEntryKind.Symlink &&
+                Encoding.UTF8.GetByteCount(entry.LinkTarget) > 100 &&
+                paxRecords?.Any(record => record.Key == "linkpath") != true)
             {
-                WriteEntry(output, header, zeroBlock, copyBuffer, PaxEntry(entry.Name, paxRecords));
+                // ustar linkname 只有 100B 且无 prefix 分身——超长链接目标走
+                // pax linkpath 扩展头（读者以 pax 为准），ustar 字段写截断值兜底。
+                paxRecords = (paxRecords ?? [])
+                    .Concat([new KeyValuePair<string, string>("linkpath", entry.LinkTarget)])
+                    .ToList();
             }
-            WriteEntry(output, header, zeroBlock, copyBuffer, entry);
+            if (paxRecords is { Count: > 0 })
+            {
+                WriteEntry(output, header, zeroBlock, copyBuffer, PaxEntry(entry.Name, paxRecords),
+                    permitPaxLinkpath: false, cancellationToken);
+            }
+            WriteEntry(output, header, zeroBlock, copyBuffer, entry, permitPaxLinkpath, cancellationToken);
         }
         if (!omitEndOfArchive)
         {
@@ -76,7 +96,8 @@ internal static class TarWriter
         }
     }
 
-    private static void WriteEntry(Stream output, byte[] header, byte[] zeroBlock, byte[] copyBuffer, TarEntry entry)
+    private static void WriteEntry(Stream output, byte[] header, byte[] zeroBlock, byte[] copyBuffer, TarEntry entry,
+        bool permitPaxLinkpath, CancellationToken cancellationToken)
     {
         Stream? contentStream = null;
         try
@@ -127,7 +148,11 @@ internal static class TarWriter
             };
             if (entry.Kind == TarEntryKind.Symlink)
             {
-                WriteString(header, 157, 100, entry.LinkTarget);
+                // permitPaxLinkpath 时超长目标已由 pax linkpath 承载，ustar 字段
+                // 写截断前缀兜底（不识 pax 的读者拿到的值不可用——GNU tar 同款）；
+                // 未开闸时全值进 WriteString——>100B 照旧显式拒绝（deb 路径必须响失败）。
+                WriteString(header, 157, 100,
+                    permitPaxLinkpath ? TruncateUtf8(entry.LinkTarget, 100) : entry.LinkTarget);
             }
             WriteString(header, 257, 6, "ustar");
             header[263] = (byte)'0';
@@ -150,6 +175,7 @@ internal static class TarWriter
                     var remaining = contentLength;
                     while (remaining > 0)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         var read = contentStream.Read(
                             copyBuffer, 0, (int)Math.Min(copyBuffer.Length, remaining));
                         if (read == 0)
@@ -229,6 +255,34 @@ internal static class TarWriter
             }
         }
         throw new ArgumentException($"Tar entry path exceeds the ustar limit: '{name}'.");
+    }
+
+    // 按 UTF-8 字符边界截到 maxBytes 内，不切断多字节序列（netstandard2.0 无
+    // System.Text.Rune——手工按代理对计宽）。
+    private static string TruncateUtf8(string value, int maxBytes)
+    {
+        if (Encoding.UTF8.GetByteCount(value) <= maxBytes)
+        {
+            return value;
+        }
+        var budget = maxBytes;
+        var count = 0;
+        while (count < value.Length)
+        {
+            var paired = char.IsHighSurrogate(value[count]) &&
+                count + 1 < value.Length && char.IsLowSurrogate(value[count + 1]);
+            var byteCount = paired ? 4
+                : value[count] < 0x80 ? 1
+                : value[count] < 0x800 ? 2
+                : 3;
+            if (byteCount > budget)
+            {
+                break;
+            }
+            budget -= byteCount;
+            count += paired ? 2 : 1;
+        }
+        return value.Substring(0, count);
     }
 
     private static void WriteString(byte[] buffer, int offset, int width, string value)

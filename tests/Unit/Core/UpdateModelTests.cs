@@ -440,6 +440,53 @@ public sealed class UpdateSignatureVerifierTests
     }
 }
 
+public sealed class UpdateBlockMapValidationTests
+{
+    [Fact]
+    public void Compute_RejectsNonPositiveBlockSize()
+    {
+        // blockSize<=0 曾静默产出全零空块表——必须显式拒绝。
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            UpdateBlockMap.Compute(new MemoryStream([1, 2, 3]), 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            UpdateBlockMap.Compute(new MemoryStream([1, 2, 3]), -64));
+    }
+
+    [Fact]
+    public void Compute_ToleratesPartialReads()
+    {
+        // 网络/包流可合法返回部分块——块表必须与一次读全等价（逐块 sha256 相同）。
+        var payload = new byte[UpdateBlockMap.DefaultBlockSize + 12345];
+        new Random(42).NextBytes(payload);
+        var expected = UpdateBlockMap.Compute(new MemoryStream(payload));
+        var chunked = UpdateBlockMap.Compute(new DribbleStream(payload));
+        Assert.Equal(expected.FileSize, chunked.FileSize);
+        Assert.Equal(expected.Hashes, chunked.Hashes);
+    }
+
+    private sealed class DribbleStream(byte[] payload) : Stream
+    {
+        private int _position;
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => _position; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var n = Math.Min(997, Math.Min(count, payload.Length - _position));
+            if (n <= 0) return 0;
+            Array.Copy(payload, _position, buffer, offset, n);
+            _position += n;
+            return n;
+        }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+}
+
 public sealed class UpdateBootstrapperTests : TempBase
 {
     [Theory]

@@ -64,6 +64,19 @@ public sealed class PayloadSourceTests : TempBase
     }
 
     [Fact]
+    public void CollectResources_DotAndEmptySegments_Normalized()
+    {
+        // '.'/空段折叠进归档路径——与 ResolveArchiveTarget 归一化同口径，
+        // 字面段不再混入出件名（覆盖核查/碰撞判定口径对齐）。
+        var source = TempPath($"res-{Guid.NewGuid():N}.txt");
+        File.WriteAllText(source, "r");
+        var items = PayloadSource.CollectResources(
+            [new BundleResourceConfiguration { Source = source, Destination = "a/./b//doc.txt" }],
+            "/opt/app", NullBundleLogger.Instance).ToArray();
+        Assert.Equal("/opt/app/a/b/doc.txt", items[0].ArchivePath);
+    }
+
+    [Fact]
     public void CollectResources_FileSource_MapsDirect()
     {
         var source = TempPath($"res-{Guid.NewGuid():N}.txt");
@@ -246,6 +259,174 @@ public sealed class PayloadSourceTests : TempBase
         var item = items.Single(i => i.ArchivePath == "/opt/app/self");
         Assert.Equal(PayloadSourceKind.Symlink, item.Kind);
         Assert.Equal(".", item.LinkTarget);
+    }
+
+    [Fact]
+    public void CollectResources_LinkToUnemittedDir_Rejected()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Windows 宿主上目录链接统一拒绝——本腿验的是包内悬空");
+        var root = Temp("bundler-res");
+        Directory.CreateDirectory(Path.Combine(root.FullName, "emptydir"));
+        var link = Path.Combine(root.FullName, "link");
+        if (!TryCreateLink(link, "emptydir", directory: true))
+        {
+            Assert.Skip("The host cannot create directory links; link leg unverifiable.");
+        }
+
+        // includeDirectories=false：emptydir 无出件后代→包内无该目录→链接悬空
+        var ex = Assert.Throws<ArgumentException>(() =>
+            PayloadSource.CollectResources(
+                [new BundleResourceConfiguration { Source = root.FullName, Destination = "res" }],
+                "/opt/app", NullBundleLogger.Instance).ToList());
+        Assert.Contains("dangle", ex.Message);
+    }
+
+    [Fact]
+    public void CollectResources_LinkToPopulatedDir_Allowed()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Windows 宿主上目录链接统一拒绝");
+        var root = Temp("bundler-res");
+        Directory.CreateDirectory(Path.Combine(root.FullName, "libs"));
+        File.WriteAllText(Path.Combine(root.FullName, "libs", "real.so"), "lib");
+        var link = Path.Combine(root.FullName, "link");
+        if (!TryCreateLink(link, "libs", directory: true))
+        {
+            Assert.Skip("The host cannot create directory links; link leg unverifiable.");
+        }
+
+        // 目录虽不出件但 libs/real.so 叶件会隐式物化 libs/——链接包内可达
+        var items = PayloadSource.CollectResources(
+            [new BundleResourceConfiguration { Source = root.FullName, Destination = "res" }],
+            "/opt/app", NullBundleLogger.Instance).ToArray();
+
+        var leaf = items.Single(i => i.ArchivePath == "/opt/app/res/link");
+        Assert.Equal("libs", leaf.LinkTarget);
+    }
+
+    [Fact]
+    public void CollectResources_LinkDirFilledByOtherResource_Allowed()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Windows 宿主上目录链接统一拒绝");
+        var rootA = Temp("bundler-res-a");
+        Directory.CreateDirectory(Path.Combine(rootA.FullName, "plugins"));
+        var link = Path.Combine(rootA.FullName, "link");
+        if (!TryCreateLink(link, "plugins", directory: true))
+        {
+            Assert.Skip("The host cannot create directory links; link leg unverifiable.");
+        }
+        var rootB = Temp("bundler-res-b");
+        File.WriteAllText(Path.Combine(rootB.FullName, "ext.so"), "x");
+
+        // link→plugins/ 在本资源内空，但另一资源把内容装进同一归档路径——
+        // 包内可达，不得误拒。
+        var items = PayloadSource.CollectResources(
+            [
+                new BundleResourceConfiguration { Source = rootA.FullName, Destination = "app" },
+                new BundleResourceConfiguration { Source = rootB.FullName, Destination = "app/plugins" }
+            ],
+            "/opt", NullBundleLogger.Instance).ToArray();
+
+        Assert.Contains(items, i => i.ArchivePath == "/opt/app/link");
+        Assert.Contains(items, i => i.ArchivePath == "/opt/app/plugins/ext.so");
+    }
+
+    [Fact]
+    public void CollectResources_Link_RelativeInstallRoot_NotFalselyRejected()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Windows 宿主上目录链接统一拒绝");
+        var root = Temp("bundler-res-rel");
+        Directory.CreateDirectory(Path.Combine(root.FullName, "libs"));
+        File.WriteAllText(Path.Combine(root.FullName, "libs", "real.so"), "lib");
+        var link = Path.Combine(root.FullName, "link");
+        if (!TryCreateLink(link, "libs", directory: true))
+        {
+            Assert.Skip("The host cannot create directory links; link leg unverifiable.");
+        }
+
+        // deb/apk/AppImage 形 installRoot 无前导 '/'——覆盖核查两侧须在
+        // 规范相对形上比对，否则 resolved 绝对形对 emitted 相对形永不命中
+        // 恒误拒（Local Review 回归）。
+        var items = PayloadSource.CollectResources(
+            [new BundleResourceConfiguration { Source = root.FullName, Destination = "res" }],
+            "usr/lib/pkg", NullBundleLogger.Instance).ToArray();
+
+        Assert.Contains(items, i => i.ArchivePath == "usr/lib/pkg/res/link");
+        Assert.Contains(items, i => i.ArchivePath == "usr/lib/pkg/res/libs/real.so");
+    }
+
+    [Fact]
+    public void CollectResources_DestinationDot_MergesIntoInstallRoot()
+    {
+        var root = Temp("bundler-res-dot");
+        File.WriteAllText(Path.Combine(root.FullName, "a.txt"), "a");
+
+        // "." 归一到空 = 载荷根合并（既有契约）——installRoot 下直接落件。
+        var items = PayloadSource.CollectResources(
+            [new BundleResourceConfiguration { Source = root.FullName, Destination = "." }],
+            "/opt/app", NullBundleLogger.Instance).ToArray();
+
+        Assert.Contains(items, i => i.ArchivePath == "/opt/app/a.txt");
+        Assert.DoesNotContain(items, i => i.ArchivePath.Contains("/./"));
+    }
+
+    [Fact]
+    public void CollectResources_DestinationDot_FileSource_Rejected()
+    {
+        var file = TempPath("bundler-res-dot-file.txt");
+        File.WriteAllText(file, "x");
+
+        // 文件源 "." 归一到空会落到 installRoot 自身路径——显式拒绝。
+        var ex = Assert.Throws<ArgumentException>(() =>
+            PayloadSource.CollectResources(
+                [new BundleResourceConfiguration { Source = file, Destination = "." }],
+                "/opt/app", NullBundleLogger.Instance).ToArray());
+        Assert.Contains("install root", ex.Message);
+    }
+
+    [Fact]
+    public void CollectResources_LinkDirMaskedBySiblingName_Allowed()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Windows 宿主上目录链接统一拒绝");
+        var root = Temp("bundler-res");
+        Directory.CreateDirectory(Path.Combine(root.FullName, "plugins"));
+        File.WriteAllText(Path.Combine(root.FullName, "plugins", "real.so"), "lib");
+        // 'plugins.bak' 排在 ('plugins', 'plugins/') 序区间里会盖住 naive 二分插入点——
+        // 真实后代 plugins/real.so 不得被它遮蔽
+        File.WriteAllText(Path.Combine(root.FullName, "plugins.bak"), "b");
+        var link = Path.Combine(root.FullName, "link");
+        if (!TryCreateLink(link, "plugins", directory: true))
+        {
+            Assert.Skip("The host cannot create directory links; link leg unverifiable.");
+        }
+
+        var items = PayloadSource.CollectResources(
+            [new BundleResourceConfiguration { Source = root.FullName, Destination = "res" }],
+            "/opt/app", NullBundleLogger.Instance).ToArray();
+
+        Assert.Contains(items, i => i.ArchivePath == "/opt/app/res/link");
+        Assert.Contains(items, i => i.ArchivePath == "/opt/app/res/plugins/real.so");
+    }
+
+    [Fact]
+    public void CollectInput_ExceedsDepthLimit_Rejected()
+    {
+        var input = Temp("bundler-deep");
+        var current = input.FullName;
+        // 65 层真实嵌套（深度界 64）——与 FileTree.CopyTree 同口径封顶
+        for (var i = 0; i <= 65; i++)
+        {
+            current = Path.Combine(current, "d");
+            Directory.CreateDirectory(current);
+        }
+
+        Assert.Throws<InvalidDataException>(() =>
+            PayloadSource.CollectInput(input.FullName, "/opt/app", "x",
+                NullBundleLogger.Instance).ToList());
     }
 
     [Fact]

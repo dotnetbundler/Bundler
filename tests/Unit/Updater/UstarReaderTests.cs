@@ -12,10 +12,13 @@ public sealed class UstarReaderTests : TempBase
 {
 
 
-    private static MemoryStream TarOf(params TarEntry[] entries)
+    private static MemoryStream TarOf(params TarEntry[] entries) => TarOf(false, entries);
+
+    private static MemoryStream TarOf(bool permitPaxLinkpath, params TarEntry[] entries)
     {
         var stream = new MemoryStream();
-        TarWriter.Write(stream, entries);
+        TarWriter.Write(stream, entries, omitEndOfArchive: false,
+            permitPaxLinkpath: permitPaxLinkpath, TestContext.Current.CancellationToken);
         stream.Position = 0;
         return stream;
     }
@@ -82,6 +85,132 @@ public sealed class UstarReaderTests : TempBase
         using var tar = TarOf(
             new TarEntry { Name = "app/link", Kind = TarEntryKind.Symlink, LinkTarget = "../../../../etc/passwd" });
         Assert.True(UstarReader.ContainsEscapingLink(tar, root));
+    }
+
+    [Fact]
+    public void ContainsEscapingLink_PaxLinkpathEscape_True()
+    {
+        // 构造档：ustar linkname 放良性值、pax linkpath 藏逃逸目标——预扫必须
+        // 按消费端（bsdtar/managed）实际取用的 linkpath 判定，不能被表面值骗过。
+        var root = Path.Combine(Root, "pax-unsafe");
+        Directory.CreateDirectory(root);
+        using var tar = TarOf(
+            new TarEntry
+            {
+                Name = "app/link", Kind = TarEntryKind.Symlink,
+                LinkTarget = "safe.txt",
+                PaxRecords = [new KeyValuePair<string, string>("linkpath", "../../../../etc/shadow")]
+            });
+        Assert.True(UstarReader.ContainsEscapingLink(tar, root));
+    }
+
+    // 构造档手写最小 tar 面——TarWriter 不产 'L' 与连续 'x' 序列，
+    // 预扫语义差例必须绕开写侧契约直铺原始块（len 字段自适应位数）。
+    private static byte[] PaxRecord(string key, string value)
+    {
+        var kv = $"{key}={value}";
+        var len = kv.Length + 3; // "<d> <kv>\n" 初探
+        while (Encoding.ASCII.GetBytes($"{len} {kv}\n").Length != len)
+        {
+            len++;
+        }
+        return Encoding.ASCII.GetBytes($"{len} {kv}\n");
+    }
+
+    private static MemoryStream RawTar(params (string Name, char Type, byte[] Data, string LinkName)[] entries)
+    {
+        var stream = new MemoryStream();
+        foreach (var (name, type, data, linkName) in entries)
+        {
+            var header = new byte[512];
+            var nameBytes = Encoding.UTF8.GetBytes(name);
+            Array.Copy(nameBytes, header, Math.Min(nameBytes.Length, 100));
+            if (linkName is { Length: > 0 } ln)
+            {
+                var linkBytes = Encoding.UTF8.GetBytes(ln);
+                Array.Copy(linkBytes, 0, header, 157, Math.Min(linkBytes.Length, 100));
+            }
+            var sizeBytes = Encoding.ASCII.GetBytes(Convert.ToString(data.Length, 8).PadLeft(11, '0') + '\0');
+            Array.Copy(sizeBytes, 0, header, 124, Math.Min(sizeBytes.Length, 12));
+            header[156] = (byte)type;
+            Array.Copy(Encoding.ASCII.GetBytes("ustar\0"), 0, header, 257, 6);
+            stream.Write(header, 0, 512);
+            stream.Write(data, 0, data.Length);
+            stream.Write(new byte[(512 - data.Length % 512) % 512]);
+        }
+        stream.Write(new byte[1024]);
+        stream.Position = 0;
+        return stream;
+    }
+
+    [Fact]
+    public void ContainsEscapingLink_PaxThenLongNameThenLink_PaxLinkpathStillJudged()
+    {
+        // x(linkpath=逃逸) → L(GNU 续名) → '2'：伪条目穿插不得丢挂起覆盖值——
+        // bsdtar 累积合并语义下该序列的链接按 pax linkpath 物化，预扫必须同判。
+        var root = Path.Combine(Root, "pseudo");
+        Directory.CreateDirectory(root);
+        using var tar = RawTar(
+            ("PaxHeader.x", 'x', PaxRecord("linkpath", "../../escape"), ""),
+            ("LongName", 'L', Encoding.UTF8.GetBytes("app/link\0"), ""),
+            ("app/link", '2', [], "benign.txt"));
+        Assert.True(UstarReader.ContainsEscapingLink(tar, root));
+    }
+
+    [Fact]
+    public void ContainsEscapingLink_LaterPaxSameKey_LastWins()
+    {
+        // 连续 'x' 同键后写胜（bsdtar 合并口径）：后写良性值覆盖前写逃逸值，
+        // 预扫与消费端同判 false——比消费端更严或更宽都是口径差。
+        var root = Path.Combine(Root, "merge");
+        Directory.CreateDirectory(root);
+        using var tar = RawTar(
+            ("PaxHeader.x1", 'x', PaxRecord("linkpath", "../../escape"), ""),
+            ("PaxHeader.x2", 'x', PaxRecord("linkpath", "benign.txt"), ""),
+            ("app/link", '2', [], "ignored.txt"));
+        Assert.False(UstarReader.ContainsEscapingLink(tar, root));
+    }
+
+    [Fact]
+    public void ContainsEscapingLink_GlobalPaxLinkpath_True()
+    {
+        // 'g' 全局 pax 头携逃逸 linkpath：落在所有后续条目的默认层——
+        // 消费端 bsdtar 会按它物化，预扫必须同判。
+        var root = Path.Combine(Root, "global");
+        Directory.CreateDirectory(root);
+        using var tar = RawTar(
+            ("PaxGlobal", 'g', PaxRecord("linkpath", "../../escape"), ""),
+            ("app/link", '2', [], "benign.txt"));
+        Assert.True(UstarReader.ContainsEscapingLink(tar, root));
+    }
+
+    [Fact]
+    public void ContainsEscapingLink_GnuLongLinkName_True()
+    {
+        // 'K' GNU 长链名：数据块即下一条目的链接目标——逃逸目标藏在长名里
+        // 而 ustar 字段放良性值，预扫仍须按真值判。
+        var root = Path.Combine(Root, "gnulong");
+        Directory.CreateDirectory(root);
+        using var tar = RawTar(
+            ("LongLink", 'K', Encoding.UTF8.GetBytes("../../../../etc/shadow\0"), ""),
+            ("app/link", '2', [], "benign.txt"));
+        Assert.True(UstarReader.ContainsEscapingLink(tar, root));
+    }
+
+    [Fact]
+    public void Extract_SymlinkLongTarget_PaxLinkpath_Restored()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "符号链接创建在 Windows 需特权");
+        var destination = Path.Combine(Root, "pax-long");
+        // >100B 的界内相对目标：写侧开闸走 pax linkpath，读侧须还原文本原值
+        var target = "../deep/" + new string('d', 110) + "/x.so";
+        using var tar = TarOf(permitPaxLinkpath: true,
+            new TarEntry { Name = "app/links/ln", Kind = TarEntryKind.Symlink, LinkTarget = target });
+
+        UstarReader.Extract(tar, destination);
+
+        var link = Path.Combine(destination, "app", "links", "ln");
+        Assert.Equal(target, new FileInfo(link).LinkTarget);
     }
 
     [Fact]

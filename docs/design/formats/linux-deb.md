@@ -25,7 +25,7 @@
 - **身份**：`Package:`（ProductName kebab 化，`BundlerDebPackageName` 覆盖）+ `Version:` + `Architecture:`（`amd64`/`arm64`，其他经 `BundlerDebArchitecture` 覆盖）；同 `Package` 名版本序列构成升级线，改名=新产品线（迁移关系由调用方 `Conflicts`/`Replaces`/`Provides` 声明）。
 - **版本映射**：SemVer→`上游版本~预发布-修订号`（`1.0.0-alpha.1`→`1.0.0~alpha.1-1`，`+build` 保留 `+`）——上游原样透传会被 dpkg 读歪，本仓库显式收紧；`BundlerDebVersion`/`BundlerDebRelease`/`BundlerDebEpoch` 显式覆盖。
 - **输入**：`InputDirectory` → `usr/lib/<package-name>/`；`MainExecutable` 须带可执行位（tar 0755）；映射冲突、路径逃逸打包前报错。
-  链接契约与 rpm/apk/AppImage 统一（`PayloadSource`/`PayloadPathBook`）：输入树内符号链接保留为包内链接条目（目标重写为相对链接目录的形式，0777），外指或悬空链接打包前拒绝，目录链接不穿透递归。
+  链接契约与 rpm/apk/AppImage 统一（`PayloadSource`/`PayloadPathBook`）：输入树内符号链接保留为包内链接条目（目标重写为相对链接目录的形式，0777），外指或悬空链接打包前拒绝，目录链接不穿透递归；链接目标另须在包内可达——`includeDirectories=false` 的资源腿指向空目录等"主机存活、包内悬空"情形同口径拒绝。链接目标超 ustar linkname 100B 上限显式拒绝（libdpkg 解包器拒 pax `x` 扩展头，不能走 linkpath 变通——apk/tar.gz 无此限）。
 - **安装**：`dpkg -i` 全量替换；升级=装更高 `Version`；降级原生放行（仅 warning、不需 `--force-downgrade`——`syspkg-verify` D3 相位实证）；`dpkg -r` 保留 conffiles、`-P` 全清。
 - **所有权**：全部 `data.tar` 载荷归包所有，卸载按 dpkg 清单删除。
 - **失败**：构建任一步失败清理半成品 `.deb` 与侧车。

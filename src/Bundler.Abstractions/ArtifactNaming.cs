@@ -27,10 +27,11 @@ public static class ArtifactNaming
                 CpuArchitecture.Universal => "universal",
                 _ => null
             },
+            // i686 无随包 runtime，后端 AppImageIdentity 明确拒绝——矩阵侧同样不产词，
+            // 让 Supports/--format all 在规划期就剪掉该必败组合而不是晚到构建期炸。
             PackageFormat.AppImage => arch switch
             {
                 CpuArchitecture.X64 => "x86_64",
-                CpuArchitecture.X86 => "i686",
                 CpuArchitecture.Arm64 => "aarch64",
                 _ => null
             },

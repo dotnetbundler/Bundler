@@ -82,8 +82,9 @@ internal static class FreedesktopFiles
     }
 
     /// <summary>
-    /// Resolves a caller-supplied file path and fails when it is missing.
-    /// <paramref name="knob"/> names the setting for the error message.
+    /// Resolves a caller-supplied file path and fails when it is missing or
+    /// not a regular file. <paramref name="knob"/> names the setting for the
+    /// error message.
     /// </summary>
     internal static string RequireExisting(string path, string knob)
     {
@@ -92,6 +93,13 @@ internal static class FreedesktopFiles
         {
             throw new FileNotFoundException(
                 $"The {knob} file does not exist: {full}", full);
+        }
+        // fifo/设备/套接件走 File.Exists 照收（只排目录）——fifo 会在读出
+        // 期挂死构建线程、设备件产出零字节载荷，共享入口统一拒非常规件。
+        if (!UnixFileTypes.IsRegularFile(full))
+        {
+            throw new ArgumentException(
+                $"The {knob} file must be a regular file: {full}");
         }
         return full;
     }
@@ -110,7 +118,6 @@ internal static class FreedesktopFiles
             normalized.Length == 0 ||
             normalized.Split('/').Any(segment =>
                 segment is "" or "." or ".." || segment.All(char.IsWhiteSpace)) ||
-            normalized.EndsWith("/", StringComparison.Ordinal) ||
             destination.Replace('\\', '/').EndsWith("/", StringComparison.Ordinal))
         {
             throw new ArgumentException(

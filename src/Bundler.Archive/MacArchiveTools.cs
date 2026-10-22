@@ -40,16 +40,17 @@ internal static class MacArchiveTools
         try
         {
             Materialize(entries, stagingRoot);
-            var ok = format == PackageFormat.Zip
+            var attempt = format == PackageFormat.Zip
                 ? Run(ScaledTimeoutMs(entries), "/usr/bin/ditto",
-                    "-c", "-k", "--sequesterRsrc", stagingRoot, partPath) == 0
+                    "-c", "-k", "--sequesterRsrc", stagingRoot, partPath)
                 : Run(ScaledTimeoutMs(entries), "/usr/bin/tar",
-                    "-czf", partPath, "-C", stagingRoot, TopStem(entries)) == 0;
-            if (!ok)
+                    "-czf", partPath, "-C", stagingRoot, TopStem(entries));
+            if (attempt.Rc != 0)
             {
                 logger.Log(BundleLogLevel.Warning,
-                    "ditto/tar archival failed; falling back to managed writer (xattrs will be lost).");
-                TryDelete(partPath);
+                    $"ditto/tar archival failed (rc={attempt.Rc}: {attempt.Err.Trim()}); " +
+                    "falling back to managed writer (xattrs will be lost).");
+                FileTree.TryDeleteFile(partPath);
             }
             else
             {
@@ -57,13 +58,13 @@ internal static class MacArchiveTools
                 logger.Log(BundleLogLevel.Information,
                     "extended attributes detected — archived via host tool to preserve xattrs/symlinks.");
             }
-            return ok;
+            return attempt.Rc == 0;
         }
         catch (Exception)
         {
             logger.Log(BundleLogLevel.Warning,
                 "host-tool archival unavailable; falling back to managed writer (xattrs will be lost).");
-            TryDelete(partPath);
+            FileTree.TryDeleteFile(partPath);
             return false;
         }
         finally
@@ -92,9 +93,9 @@ internal static class MacArchiveTools
         var partPath = outputPath + ".bundler-part";
         try
         {
-            var ok = Run(ScaledTimeoutMs(appDirectory), "/usr/bin/ditto",
-                "-c", "-k", "--sequesterRsrc", "--keepParent", appDirectory, partPath) == 0;
-            if (ok)
+            var attempt = Run(ScaledTimeoutMs(appDirectory), "/usr/bin/ditto",
+                "-c", "-k", "--sequesterRsrc", "--keepParent", appDirectory, partPath);
+            if (attempt.Rc == 0)
             {
                 File.Move(partPath, outputPath);
                 logger.Log(BundleLogLevel.Information,
@@ -102,13 +103,13 @@ internal static class MacArchiveTools
             }
             else
             {
-                TryDelete(partPath);
+                FileTree.TryDeleteFile(partPath);
             }
-            return ok;
+            return attempt.Rc == 0;
         }
         catch (Exception)
         {
-            TryDelete(partPath);
+            FileTree.TryDeleteFile(partPath);
             return false;
         }
     }
@@ -130,9 +131,8 @@ internal static class MacArchiveTools
                     break;
                 case TarEntryKind.Symlink:
                     Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                    Require(Run(60_000, "/bin/ln",
-                            "-sfn", entry.LinkTarget!, destination),
-                        $"ln -sfn '{entry.LinkTarget}' '{destination}'");
+                    ToolRunner.RunSync("/bin/ln",
+                        ["-sfn", entry.LinkTarget!, destination]);
                     CopySourceXattrs(entry, destination);
                     break;
                 default:
@@ -144,13 +144,11 @@ internal static class MacArchiveTools
                     else
                     {
                         // cp -p 在 macOS 上随模式一并复制扩展属性与资源叉。
-                        Require(Run(60_000, "/bin/cp",
-                                "-p", entry.SourcePath!, destination),
-                            $"cp -p '{entry.SourcePath}' '{destination}'");
+                        ToolRunner.RunSync("/bin/cp",
+                            ["-p", entry.SourcePath!, destination]);
                     }
-                    Require(Run(60_000, "/bin/chmod",
-                            Convert.ToString(entry.Mode, 8), destination),
-                        $"chmod {Convert.ToString(entry.Mode, 8)} '{destination}'");
+                    ToolRunner.RunSync("/bin/chmod",
+                        [Convert.ToString(entry.Mode, 8), destination]);
                     break;
             }
         }
@@ -162,14 +160,6 @@ internal static class MacArchiveTools
             !UnixLinks.CopyExtendedAttributes(source, destination))
         {
             throw new IOException($"failed to copy extended attributes '{source}' → '{destination}'.");
-        }
-    }
-
-    private static void Require(int rc, string what)
-    {
-        if (rc != 0)
-        {
-            throw new IOException($"host tool step failed rc={rc}: {what}");
         }
     }
 
@@ -203,34 +193,15 @@ internal static class MacArchiveTools
         }
     }
 
-    private static void TryDelete(string path)
+    // 超时即杀语义由 ToolRunner 统一保证——不许半成品工具与回退写出器并发改
+    // 同一目标；stderr 带回供告警（旧自管壳丢 stderr，失败只有裸 rc）。
+    private static (int Rc, string Err) Run(
+        int timeoutMilliseconds, string file, params string[] arguments)
     {
-        try
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch (Exception) { }
-    }
-
-    // 超时即杀——不许半成品工具与回退写出器并发改同一目标。
-    private static int Run(int timeoutMilliseconds, string file, params string[] arguments)
-    {
-        var startInfo = new ToolProcessStartInfo { FileName = file };
-        startInfo.Arguments.AddRange(arguments);
-        using var process = ToolProcess.Start(startInfo);
-        if (process is null)
-        {
-            return -1;
-        }
-        if (!process.WaitForExit(timeoutMilliseconds))
-        {
-            try { process.Kill(); } catch (Exception) { }
-            try { process.WaitForExit(10_000); } catch (Exception) { }
-            return -1;
-        }
-        return process.ExitCode;
+        var result = ToolRunner.TryRunAsync(
+            file, arguments, "", CancellationToken.None,
+            timeout: TimeSpan.FromMilliseconds(timeoutMilliseconds))
+            .GetAwaiter().GetResult();
+        return (result?.ExitCode ?? -1, result?.StandardError ?? "");
     }
 }

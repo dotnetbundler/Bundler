@@ -13,7 +13,6 @@ internal static class ArchiveValidation
 {
     internal static void Settings(ArchiveBundleConfiguration settings, BundleConfiguration bundle)
     {
-        ArchiveIdentity.PackageName(bundle, settings);
         if (settings.ArchiveName is { } name)
         {
             ArchiveIdentity.ValidateStem(name);
@@ -23,13 +22,19 @@ internal static class ArchiveValidation
             ArchiveTree.ValidateDestination(file.Destination);
             ArchiveTree.RequireExisting(file.Source);
         }
+        var packageName = ArchiveIdentity.PackageName(bundle, settings);
+        var version = settings.Version ?? bundle.Version;
         foreach (var target in bundle.Targets)
         {
-            if (ArtifactNaming.ArchToken(BundleTarget.Parse(target.Target), PackageFormat.Zip) is null)
+            var parsed = BundleTarget.Parse(target.Target);
+            if (ArtifactNaming.ArchToken(parsed, PackageFormat.Zip) is null)
             {
                 throw new ArgumentException(
                     $"Architecture of target '{target.Target}' is not supported for archives.");
             }
+            // version 参与默认 stem 组成——含 '/'、空白或 '..' 的版本在 Build 才炸；
+            // 把合成 stem 的校验提前到 Validate，与显式 ArchiveName 同缝。
+            ArchiveIdentity.ArchiveStem(settings, packageName, version, parsed);
         }
     }
 }

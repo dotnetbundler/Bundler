@@ -38,13 +38,6 @@ internal static class TestProc
         return mapped;
     }
 
-    // 夹具把启动参数拼回整串（道具 spawn 需要 argv 文本）。
-    public static string Describe(ToolProcessStartInfo info)
-        => info.Arguments.Count > 0 ? string.Join(' ', info.Arguments) : info.ArgumentLine ?? "";
-
     public static ToolProcess? Start(ProcessStartInfo info)
         => ToolProcess.Start(Map(info));
-
-    public static bool WaitForExit(ToolProcess process, int timeoutMilliseconds)
-        => process.WaitForExit(timeoutMilliseconds);
 }

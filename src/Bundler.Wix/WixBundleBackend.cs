@@ -259,8 +259,8 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         }
         catch
         {
-            if (File.Exists(outputPath)) File.Delete(outputPath);
-            if (File.Exists(manifestPath)) File.Delete(manifestPath);
+            FileTree.TryDeleteFile(outputPath);
+            FileTree.TryDeleteFile(manifestPath);
             throw;
         }
         finally
@@ -416,6 +416,9 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         if (bundle.LicenseFile is not null) text.AppendLine(HashFile(bundle.LicenseFile));
         if (settings.BannerFile is not null) text.AppendLine(HashFile(settings.BannerFile));
         if (settings.DialogFile is not null) text.AppendLine(HashFile(settings.DialogFile));
+        // -fips 只进 candle argv 不进 wxs 本体——不哈希进指纹的话，同载荷
+        // 切旋钮会复用上趟缓存静默交付错配置 MSI。
+        text.AppendLine(settings.FipsCompliant.ToString());
         AppendExtensionFingerprint(text);
         text.AppendLine(canonical.ToString(SaveOptions.DisableFormatting));
         return Hashes.ToUpperHex(Hashes.Sha256(Encoding.UTF8.GetBytes(text.ToString())));
@@ -500,6 +503,9 @@ internal sealed class WixBundleBackend(WixToolset toolset, WixBundleConfiguratio
         if (bundle.LicenseFile is not null) text.AppendLine(HashFile(bundle.LicenseFile));
         if (settings.BannerFile is not null) text.AppendLine(HashFile(settings.BannerFile));
         if (settings.DialogFile is not null) text.AppendLine(HashFile(settings.DialogFile));
+        // -fips 只进 candle argv 不进 wxs 本体——不哈希进指纹的话，同载荷
+        // 切旋钮会复用上趟缓存静默交付错配置 MSI。
+        text.AppendLine(settings.FipsCompliant.ToString());
         AppendExtensionFingerprint(text);
         return Hashes.ToUpperHex(Hashes.Sha256(Encoding.UTF8.GetBytes(text.ToString())));
     }

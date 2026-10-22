@@ -31,21 +31,214 @@ usage() {
 }
 
 log() {
+    # 行内 \r\n 折空格：调用方串（--pkg/--app 原值）嵌行进日志会把一条
+    # 记录拆成多行，日志件沦为伪造记录/单行注入面（AOT SanitizeLogLine 同口径）。
+    _lm=$(printf '%s' "$1" | tr '\r\n' '  ')
     if [ -n "$LOG_FILE" ]; then
         # 日志件写入失败降级 stderr WARN（首败报一次）并继续——日志是留痕
         # 辅助，不可写不该阻断换包/装包主流程（AOT CreateLog 同口径）。
-        # 复核登记：--log 追加写顺链——日志路径属调用方受托面（特权进程按调用方
-        # 指定位置写日志是天职，不做链接拒判）；无 --log 时写 stdout，对端管道
-        # 先关会 SIGPIPE 中途打死脚本——换包主链有 marker/恢复兜底不砖，stdio
-        # 存活性同样属调用方受托面，仅登记不改。
-        if ! (printf '%s\n' "$1" >>"$LOG_FILE") 2>/dev/null; then
+        # 首用懒开：_pa_log_open 校验+exec 9>> 钉 fd（pkg_apply 段已前置
+        # 硬校验 rc3 拒；apply 腿懒开失败走 WARN 降级不写文件日志）。
+        if [ -z "${_pa_log_done:-}" ]; then
+            _pa_log_done=1
+            _pa_log_open || _LOG_BAD=1
+        fi
+        if [ "${_LOG_BAD:-0}" = 1 ] || ! (printf '%s\n' "$_lm" >&9) 2>/dev/null; then
             [ -n "${_LOG_WARNED:-}" ] && return 0
             _LOG_WARNED=1
             echo "bundler-updater: WARN cannot write log file '$LOG_FILE' — continuing without file logging" >&2
         fi
     else
-        printf '%s\n' "$1"
+        printf '%s\n' "$_lm"
     fi
+}
+
+# fd 钉住复核：fd 上开定的是"与 check 时记录的 dev:ino 同件"普通件，
+# 属主落允许 uid 集。/dev/fd|/proc/self/fd 直 stat 先行（Linux 恒达）；
+# devfs 宿主（macOS 对自属 fd 的 /dev/fd/N stat 常 EBADF——CI 实证）
+# 报节点自身 dev:ino 或直接失败的两种形态都不符→退 lsof 读内核
+# vnode：i 字段钉 fd 真实 inode（mandatory）、D 字段钉 fs dev，
+# 件身钉死不靠路径名；属主只能经 vnode 名 stat 复核（lsof 无件属主
+# 字段——u 是进程 uid），名缺/转义时件身已 dev:ino 全钉、属主残窗
+# 登记见函数尾。 lsof 缺席→拒（fail closed 同口径）。
+# $1=fd 号；$2=check 时记录的 dev:ino；$3=允许 uid 列表（空格分隔，
+# 空=不复核属主——属主复核抓 chown 竞态，inode 等值不挡属主变更）。
+_pa_fd_same() {
+    _fs_p=/dev/fd/$1
+    [ -e "$_fs_p" ] || _fs_p=/proc/self/fd/$1
+    _fs_i=$(stat -Lc '%d:%i' "$_fs_p" 2>/dev/null || stat -Lf '%d:%i' "$_fs_p" 2>/dev/null || true)
+    if [ -n "$_fs_i" ] && [ "$_fs_i" = "$2" ] && [ -f "$_fs_p" ]; then
+        [ -z "${3:-}" ] && return 0
+        _fs_o=$(stat -Lc %u "$_fs_p" 2>/dev/null || stat -Lf %u "$_fs_p" 2>/dev/null || true)
+        for _fs_w in $3; do
+            [ "$_fs_o" = "$_fs_w" ] && return 0
+        done
+        return 1
+    fi
+    # lsof 先走 PATH，兜底知名绝对位——提权/最小 env 的 PATH 常裁掉
+    # /usr/sbin（macOS 的 lsof 恒在该处），protocol 内工具不依赖 PATH。
+    _fs_lsof=$(command -v lsof 2>/dev/null || true)
+    if [ -z "$_fs_lsof" ]; then
+        for _fs_lp in /usr/sbin/lsof /usr/bin/lsof /sbin/lsof /bin/lsof; do
+            [ -x "$_fs_lp" ] && { _fs_lsof=$_fs_lp; break; }
+        done
+    fi
+    [ -n "$_fs_lsof" ] || return 1
+    # -n 免 DNS 反查：提权语境无解析器会让 vnode 名解析阻塞 lsof 本身。
+    # 不取 u 字段——那是"进程 uid"非件属主，对属主复核无意义。
+    _fs_l=$("$_fs_lsof" -n -a -p "$$" -d "$1" -F tiDn 2>/dev/null)
+    if [ -z "$_fs_l" ]; then
+        # PATH 命中的 lsof 损坏/执行失败 → 重扫知名绝对位（同一二进制
+        # 重扫无害：fd 无匹配的空输出换源仍空→拒，fail-closed 同口径）。
+        for _fs_lp in /usr/sbin/lsof /usr/bin/lsof /sbin/lsof /bin/lsof; do
+            [ -x "$_fs_lp" ] || continue
+            _fs_l=$("$_fs_lp" -n -a -p "$$" -d "$1" -F tiDn 2>/dev/null)
+            [ -n "$_fs_l" ] && break
+        done
+    fi
+    _fs_t=$(printf '%s\n' "$_fs_l" | sed -n 's/^t//p')
+    { [ "$_fs_t" = REG ] || [ "$_fs_t" = VREG ]; } || return 1
+    # fd vnode inode 比对为 mandatory——name-stat 只补 dev/属主，不能替代
+    # fd 钉身（exec 开完到 lsof 之间名被换回的话，stat(name) 会指回旧件）。
+    _fs_n=$(printf '%s\n' "$_fs_l" | sed -n 's/^i//p')
+    [ -n "$_fs_n" ] && [ "$_fs_n" = "${2##*:}" ] || return 1
+    # dev 分量钉住走 D 字段（件所在 fs 的 st_dev，0x 十六进制转十进制
+    # 后与 stat %d 同单位）——不靠名。D 缺席时名可 stat 由 dev:ino 全量
+    # 补钉 dev；名亦不可 stat→拒（无 ino 单分量放行）。
+    _fs_d=$(printf '%s\n' "$_fs_l" | sed -n 's/^D//p')
+    case $_fs_d in
+        0x*) _fs_d=${_fs_d#0x}
+             case $_fs_d in
+                 ''|*[!0-9a-fA-F]*) _fs_d="" ;;
+                 *) _fs_d=$((0x${_fs_d})) ;;
+             esac ;;
+        *) _fs_d="" ;;
+    esac
+    if [ -n "$_fs_d" ]; then
+        [ "$_fs_d" = "${2%%:*}" ] || return 1
+    fi
+    # 名可 stat 时叠加 dev:ino 全量一致性核（lsof 报的名此刻仍指同件）；
+    # 名缺/控制字符转义/已删件 → 件身靠 i+D 钉死即可，属主复核不可达。
+    _fs_nm=$(printf '%s\n' "$_fs_l" | sed -n 's/^n//p')
+    _fs_i=""
+    [ -n "$_fs_nm" ] && \
+        _fs_i=$(stat -c '%d:%i' "$_fs_nm" 2>/dev/null || stat -f '%d:%i' "$_fs_nm" 2>/dev/null || true)
+    if [ -n "$_fs_i" ]; then
+        [ "$_fs_i" = "$2" ] || return 1
+    elif [ -z "$_fs_d" ]; then
+        # ino 单分量 + 属主不可核 = 双残窗 → 拒。
+        return 1
+    fi
+    [ -z "${3:-}" ] && return 0
+    if [ -n "$_fs_i" ]; then
+        # 属主只能经 vnode 名 stat（lsof 无件属主字段）；名 dev:ino 已
+        # 证同件，其 st_uid 即 fd 件属主。
+        _fs_u=$(stat -c %u "$_fs_nm" 2>/dev/null || stat -f %u "$_fs_nm" 2>/dev/null || true)
+        [ -n "$_fs_u" ] || return 1
+        for _fs_w in $3; do
+            [ "$_fs_u" = "$_fs_w" ] && return 0
+        done
+        return 1
+    fi
+    # 名不可 stat 但件身 dev:ino 全钉——残窗登记：check 后 chown 竞态
+    #（仅件主/root 可为；件主自竞或特权方本就无碍）。放行对 AOT
+    # fstat 恒达的口径——\n 名等转义件在双腿保持同行为。
+    return 0
+}
+
+# --log 开件+校验（pkg_apply 前置硬调、log() 首用懒调）：提权侧 argv 给的
+# 写路径按"调用者可写"复核——件在=普通件且属主==调用 uid；件不在=父目录
+# 调用者可写（属主匹配或 o+wx 公共可写区）。exec 9>> 一次开定 O_APPEND
+# 钉住 inode，其后在 fd 上（/dev/fd/9，devfs 宿主走 _pa_fd_same 的 lsof
+# 兜底）复核属主——check→open 换件窗内出现的件属主两不沾（非调用 uid
+# 且非 euid）即拒（AOT OpenLogFile 同口径）。
+# uid 拿不到=无法复核属主→拒（fail closed，env 件同款口径）。
+_pa_log_open() {
+    [ -n "$LOG_FILE" ] || return 0
+    # PA_UID 只在 pkg_apply 初始化——apply 腿走 id -u 兜底；set -u 下
+    # 直引未置变量会让整个脚本带 unbound-variable 夭折（永远走不到
+    # WARN 降级路）。
+    _lu=${PA_UID:-}
+    [ -n "$_lu" ] || _lu=$(id -u 2>/dev/null || true)
+    [ -n "$_lu" ] || return 1
+    _li=""
+    # -e 对悬空链接为假——-h 一并判存在，否则 dangling link 走"件不在"
+    # 分支只验父目录，open 会跟随链接以提权身份建出目标件。
+    if [ -e "$LOG_FILE" ] || [ -h "$LOG_FILE" ]; then
+        [ -f "$LOG_FILE" ] && [ ! -h "$LOG_FILE" ] || return 1
+        # 调用者即 root（_lu=0）：DAC 覆盖本就全域可写——容器/守护语境
+        # 挂宿主属主件也能真写，刚性属主比对会误拒（musl 冒烟实证）；
+        # pkexec 腿 _lu 是真实桌面用户，严格度不变。
+        if [ "$_lu" != "0" ]; then
+            _lo=$(stat -c %u "$LOG_FILE" 2>/dev/null || stat -f %u "$LOG_FILE" 2>/dev/null || true)
+            [ -n "$_lo" ] && [ "$_lo" = "$_lu" ] || return 1
+        fi
+        # check→open 换件窗收口：记下 dev:ino，fd 复核比对同件——窗内
+        # 把路径换成指向 root 件的链接会 mismatch 被拒（SEC 回归）。
+        _li=$(stat -c '%d:%i' "$LOG_FILE" 2>/dev/null || stat -f '%d:%i' "$LOG_FILE" 2>/dev/null || true)
+        [ -n "$_li" ] || return 1
+        # POSIX special builtin（exec 与 : 同档）的重定向失败在 dash
+        # 属致命错整脚本暴毙（|| 永远走不到），且 exec 上 2>/dev/null
+        # 会把全脚本 stderr 永久钉死——预探测放子壳收容（子壳 fatal
+        # 只杀子壳回非零、不带走主壳），探测过才 exec 钉 fd。
+        # 残余窗登记：(a) 探测→exec 之间换入不可开目标（目录等）时裸
+        #   exec 仍按 special builtin 致命暴毙（建件分支 stat→exec
+        #   同形窗未单列登记）——毫秒级竞态、后果仅为脚本退出不越权；
+        #   件被删不触发（>> 带 O_CREAT 会重建，随后 inode 比对按
+        #   干净拒收——复用刚释放 inode 的理论窗内可比中放行，后果
+        #   仍良性：euid 属空件作日志）；(b) check(-f)→探测 与
+        #   探测→exec 两段窗内换入 fifo 时 >>/exec 无时限阻塞（建件
+        #   分支 create→exec 同形；AOT 同位 OpenWithDeadline 5s 收口、
+        #   sh 无等价原语——timeout 只能包外部命令，登记为两实现已知
+        #   差异，旧实现同款暴露未恶化）；(c) 探测 >> 在换件窗内可建
+        #   出 euid 属空件——随后被 inode 复核拒但件留存（良性残留，
+        #   不越权）。
+        ( : >>"$LOG_FILE" ) 2>/dev/null || return 1
+        exec 9>>"$LOG_FILE" || { exec 9>&-; return 1; }
+    else
+        _ld=${LOG_FILE%/*}
+        [ "$_ld" = "$LOG_FILE" ] && _ld=.
+        # 根直下路径 /x 的 %/* 得空串——归一 / 再走目录判（AOT
+        # GetDirectoryName 返 "/" 同位）。
+        [ -z "$_ld" ] && _ld=/
+        # 父目录不存在/非目录=良性不可写（rc2 语义）→WARN 降级续行；
+        # 目录是符号链接=换件窗违规（rc1 语义）→硬拒（AOT
+        # LogUnavailable/UsageException 两级同口径）。
+        [ -d "$_ld" ] || return 2
+        [ -h "$_ld" ] && return 1
+        # 调用者即 root：属主/o+wx 复核直通（DAC 覆盖——同上）。
+        if [ "$_lu" != "0" ]; then
+            _lo=$(stat -c %u "$_ld" 2>/dev/null || stat -f %u "$_ld" 2>/dev/null || true)
+            _lp=$(stat -c %a "$_ld" 2>/dev/null || stat -f %Lp "$_ld" 2>/dev/null || true)
+            if [ -z "$_lo" ] || [ "$_lo" != "$_lu" ]; then
+                # 公共可写区（/tmp sticky 类）：others 写+执行两位置位才放行
+                case "$_lp" in *[37]) : ;; *) return 1 ;; esac
+            fi
+        fi
+        # O_EXCL 原子建件：noclobber 让 > 对已存在路径（含符号链接——
+        # O_CREAT|O_EXCL 不跟随，dangling 同拒）失败，check→open 换件
+        # 窗在 open 一刻归零（AOT CREAT|NOFOLLOW 同口径）。子壳执行
+        # 失败只回非零不致命；建成记 inode 让 fd 复核比对同件。
+        (set -C; : >"$LOG_FILE") 2>/dev/null || return 1
+        _li=$(stat -c '%d:%i' "$LOG_FILE" 2>/dev/null || stat -f '%d:%i' "$LOG_FILE" 2>/dev/null || true)
+        if [ -z "$_li" ]; then
+            rm -f "$LOG_FILE" 2>/dev/null || true
+            return 1
+        fi
+        exec 9>>"$LOG_FILE" || { exec 9>&-; return 1; }
+    fi
+    # 三重复核（普通件+dev:ino 同件+属主落调用 uid 或本进程 euid）收进
+    # _pa_fd_same——devfs 宿主的 fd 复核由该函数内 lsof 兜底。
+    # 调用者即 root：属主白名单放空（_pa_fd_same 空白名单=只验 dev:ino
+    # 件身）——与 AOT CallerIsRoot 直通同口径，异主既有/抢建件在 root
+    # 语境下不再被白名单死闸误拒。
+    _fu=""
+    [ "$_lu" != "0" ] && _fu="$_lu $(id -u 2>/dev/null)"
+    if ! _pa_fd_same 9 "$_li" "$_fu"; then
+        exec 9>&-
+        return 1
+    fi
+    return 0
 }
 
 restart_app() {
@@ -165,10 +358,51 @@ _pa_timed() {
 _pa_sweep_stages() {
     command -v find >/dev/null 2>&1 || return 0
     command -v rm >/dev/null 2>&1 || return 0
+    command -v mv >/dev/null 2>&1 || return 0
+    command -v rmdir >/dev/null 2>&1 || return 0
     for _d in "${TMPDIR:-/tmp}"/bundler-pkg.[!.]* "${TMPDIR:-/tmp}"/bundler-pkg-*; do
-        [ -d "$_d" ] || continue
-        [ -n "$(find "$_d" -prune -mmin +1440 -print 2>/dev/null)" ] && \
-            rm -rf "$_d" 2>/dev/null || true
+        # 真目录或任意链接名目都进扫（链→文件/悬空链同为残件名目，龄门按
+        # 链自身 lstat mtime 判——与 AOT 枚举口径对齐）；裸常规件跳过。
+        [ -d "$_d" ] || [ -L "$_d" ] || continue
+        [ -n "$(find "$_d" -prune -mmin +1440 -print 2>/dev/null)" ] || continue
+        # 钉名：先 mv 私有名——判龄到删件窗内名目被换链的风险归零；
+        # .sweep.$$ 后缀仍在 bundler-pkg* glob 面内，弃收件下轮重扫不丢。
+        # held 名目撞已有目（跨进程 PID 复用残留）时 mv 会把 _d 嵌套进去
+        # 产永久弃收件——预检在场即跳过 + mv -n 无覆盖语义关 check→act 残
+        # 窗（撞名时 -n 静默不搬——_held 不在则后续清扫空跑、_d 留名下轮重扫；
+        # 实现不收 -n 则 mv 报错同走 continue）。
+        _held="${_d}.sweep.$$"
+        [ -e "$_held" ] || [ -L "$_held" ] && continue
+        mv -n "$_d" "$_held" 2>/dev/null || continue
+        # mv -n 只在 dest/basename 撞件时不搬——held 撞"目录/链→目录"形态仍
+        # 会把 _d 嵌套进去（GNU/BSD/busybox 同模型，第 38 轮实证）。嵌套检
+        # 测：held 名下出现 _d 本名即搬回原名，held 撞名目留待下轮再扫。
+        if [ -e "$_held/${_d##*/}" ] || [ -L "$_held/${_d##*/}" ]; then
+            mv "$_held/${_d##*/}" "$_d" 2>/dev/null || true
+            continue
+        fi
+        # 名目真腾空才进清扫——_d 还在 = -n 静默未搬（held 撞文件/链名目，
+        # held 是外来名目绝不能动），下轮换名重扫。
+        # 残余：预检→mv 窗内外来 held 落位 + mv→本判窗内 _d 被并发摘除——
+        # 两窗串联才会误把外来 held 当本扫件（限契约名目内、仅摘链节点，
+        # 概率近零）；彻底闭合需 lstat dev:ino 比对，登记不实现。
+        { [ -e "$_d" ] || [ -L "$_d" ]; } && continue
+        # mv 钉住的是条目本体：名目本来就是链接（或竞态被换链）时 mv 移的是
+        # 链非目标——held 是链则只摘链（龄门两侧同取链自身 mtime：sh find
+        # -P lstat、AOT GetLastWriteTimeUtc 对链同为 lstat 口径；新链+旧
+        # 目标两侧同留不收，摘除动作也只摘链不触目标）。
+        if [ -L "$_held" ]; then rm -f "$_held" 2>/dev/null; continue; fi
+        # 契约暂存目只装平铺常规件——逐条只删条目本体：链接 rm -f 只摘链
+        # 不跟目标；真目录（含 FUSE/bind 挂载点）出现即整体弃收。root 侧
+        # /tmp 跨用户共享，rm -rf 跨界扫挂载树即"root 任意删除"原语，
+        # 发现目录即弃收是不跨界语义（AOT SweepOne 同口径）。
+        _flat=1
+        for _e in "$_held"/* "$_held"/.[!.]* "$_held"/..?*; do
+            [ -e "$_e" ] || [ -L "$_e" ] || continue
+            if [ -d "$_e" ] && [ ! -L "$_e" ]; then _flat=; break; fi
+            rm -f "$_e" 2>/dev/null
+        done
+        [ -n "$_flat" ] && rmdir "$_held" 2>/dev/null || true
     done
 }
 
@@ -294,7 +528,10 @@ _pa_install() {
 # 残件兜底在客户端拉起腿退出删余（Exited 钩/速退内联）与 24h staging 清扫。rm -f/rmdir 全尽力不挡退出码；
 # 父目录仅本编排契约的 pkg-* 名才动，外来目录不碰。
 _pa_env_cleanup() {
-    [ -n "$PA_ENV" ] || return 0
+    # 只在读定（校验全过）后清件——校验被拒的路径不归我们删：任意的
+    # --env-file 指向（/etc/shadow 类）在拒绝后仍被兜底删件就是"root
+    # 删调用方任意件"原语（AOT envFileRead 闸同口径）。
+    [ -n "$PA_ENV" ] && [ "${_PA_ENV_OK:-0}" = 1 ] || return 0
     rm -f "$PA_ENV" 2>/dev/null || true
     _d=${PA_ENV%/*}
     [ -n "$_d" ] || _d=/
@@ -308,39 +545,78 @@ _pa_env_cleanup() {
 }
 
 # --env-file 预检+预读（TOCTOU 收口，rc3 拒绝口径）：显式给了就必须是"调用者
-# 所有的可读普通件"——普通文件 + 非链接 + st_uid==调用 uid 三重校验，任一过不了
-# 一律拒（调用方判参错），绝不静默降级成"件未提供"。旧口径 -f/-r 检查与真实 open
-# 之间有窗：fifo 能把读它的 root 进程挂死，symlink 会把 root 私有件内容灌进降权
-# app 的 env（用户经 /proc/<app>/environ 读回）——双侧同口径。
-# 属主=st_uid 复核：stat 优先 GNU/busybox -c %u，退化 BSD -f %u；两种 stat 或
-# id（uid 缺席取本进程 euid 时用）都缺席=无法复核→拒（安全默认）。
-# 读取侧 timeout 5 cat 兜底：check→open 残窗内换入 fifo 只败在 5s 上限内，
-# timeout 缺席才退裸 cat（此刻已三重校验过）。内容读定进 _PA_ENV_RAW 钉住——
-# 其后不再触路径，窗内换件/删件都影响不了本轮回放。
+# 所有的可读普通件"——任一过不了一律拒（调用方判参错），绝不静默降级成
+# "件未提供"。open 先钉住 inode：exec 3<> 走 O_RDWR——fifo 以读写开立即
+# 返回不阻塞（裸 O_RDONLY 开会挂死等写端，原 timeout 5 cat 兜底窗一并
+# 消掉），普通件在 root 身份下不受权限位约束能开；其后类型/属主/读取
+# 全走 fd（/dev/fd/3→/proc/self/fd/3→lsof 三级，见 _pa_fd_same）不触路径——旧 -f/-h/-r/stat/cat
+# 逐段查与真实 open 之间窗内 fifo 可挂死 root 进程、symlink 可把 root
+# 私有件灌进降权 app 的 env（用户经 /proc/<app>/environ 读回）。
+# 换件窗由 dev:ino 比对钉死：预探测时 stat 记下路径件的 dev:ino，
+# exec 3<> 后 fd 上 stat -L 复核同值——stat→open 之间换件（同主/
+# 异主/链接）即 mismatch 被拒；-h 预查只为对齐 AOT 链接拒判面
+#（NOFOLLOW→ELOOP 语义）。
+# 残余窗登记：-h check→stat 之间换同主普通件（含同 inode 硬链接
+# 换位）会静默通过——良性，两实现同款暴露；换链接不通过（stat
+# lstat 记链接自身 ino，fd 复核记目标 ino——必 mismatch 拒）；
+# 探测→exec 之间换入目录等不可开目标时裸 exec 按 special builtin
+# 致命退（dash rc2/bash rc1，不带 usage 文案）——毫秒级竞态不越权；
+# 件被删不触发 fatal（<> 带 O_CREAT 会重建空件→inode mismatch
+# 干净拒）；探测 <> 对窗内换入的 dangling 链接会在链接目标处建
+# 出 euid 属空件（提权语境即任意路径空件残留——拒仍成立、副作用
+# 不可安全回收：按链接目标 rm 会删错件，登记不处置）；件被删
+# 重建若复用刚释放 inode 可比中放行——euid==调用 uid 时读空件
+# 退化最小 env（良性），euid≠uid 时被属主复核拒；<> O_RDWR 对
+# fifo 不阻塞，无 log 侧同形阻塞窗。
+# 读定内容进 _PA_ENV_RAW 并置 _PA_ENV_OK=1——其后不再触路径，清件闸只认
+# 读定态（校验被拒的路径不归我们删，见 _pa_env_cleanup）。
 _pa_env_validate() {
-    if [ ! -f "$PA_ENV" ] || [ -h "$PA_ENV" ] || [ ! -r "$PA_ENV" ]; then
+    _PA_ENV_RAW=""
+    _PA_ENV_OK=0
+    if [ -h "$PA_ENV" ]; then
         echo "bundler-updater: --env-file '$PA_ENV' is not a readable regular file owned by the calling user." >&2
         pkg_usage
         return 1
     fi
-    _ev_uid=$PA_UID
+    # check→open 换件窗收口：记 dev:ino，fd 复核比对同件——窗内换成
+    # 指向异主件的链接会 mismatch 被拒（-h 预查对齐链接拒判面，真正
+    # 钉住靠 inode 比对）。: 与 exec 同属 POSIX special builtin——
+    # 重定向失败在 dash 属致命错且 exec 上 2>/dev/null 会永久静默
+    # 全脚本 stderr，预探测放子壳收容（<> 读写模式开 fifo 不阻塞），
+    # 探测过才 exec 钉 fd。
+    _ei=$(stat -c '%d:%i' "$PA_ENV" 2>/dev/null || stat -f '%d:%i' "$PA_ENV" 2>/dev/null || true)
+    if [ -z "$_ei" ]; then
+        echo "bundler-updater: --env-file '$PA_ENV' is not a readable regular file owned by the calling user." >&2
+        pkg_usage
+        return 1
+    fi
+    ( : <>"$PA_ENV" ) 2>/dev/null || {
+        echo "bundler-updater: --env-file '$PA_ENV' is not a readable regular file owned by the calling user." >&2
+        pkg_usage
+        return 1
+    }
+    exec 3<>"$PA_ENV" || {
+        echo "bundler-updater: --env-file '$PA_ENV' is not a readable regular file owned by the calling user." >&2
+        pkg_usage
+        return 1
+    }
+    _ev_uid=${PA_UID:-}
     [ -n "$_ev_uid" ] || _ev_uid=$(id -u 2>/dev/null || true)
-    _ev_own=$(stat -c %u "$PA_ENV" 2>/dev/null || stat -f %u "$PA_ENV" 2>/dev/null || true)
-    if [ -z "$_ev_uid" ] || [ -z "$_ev_own" ] || [ "$_ev_own" != "$_ev_uid" ]; then
+    if [ -z "$_ev_uid" ] || ! _pa_fd_same 3 "$_ei" "$_ev_uid"; then
+        exec 3>&-
         echo "bundler-updater: --env-file '$PA_ENV' is not a readable regular file owned by the calling user." >&2
         pkg_usage
         return 1
     fi
-    if command -v timeout >/dev/null 2>&1; then
-        _PA_ENV_RAW=$(timeout 5 cat "$PA_ENV" 2>/dev/null)
-    else
-        _PA_ENV_RAW=$(cat "$PA_ENV" 2>/dev/null)
-    fi
-    if [ $? -ne 0 ]; then
+    _PA_ENV_RAW=$(cat <&3)
+    _ev_rc=$?
+    exec 3>&-
+    if [ "$_ev_rc" -ne 0 ]; then
         echo "bundler-updater: --env-file '$PA_ENV' is not a readable regular file owned by the calling user." >&2
         pkg_usage
         return 1
     fi
+    _PA_ENV_OK=1
     return 0
 }
 
@@ -475,6 +751,30 @@ _pa_restart() {
     return 1
 }
 
+# 词法归一（不触文件系统）：折 ./.. 段、相对路径按 $PWD 绝对化——
+# 与 AOT Path.GetFullPath 同口径。定义先于 pkg_apply/apply 两腿共用；
+# 输出路径的叶段必须保留拼写（叶链由各自校验判拒，不能物理化）。
+norm_lexical() {
+    _nl=$1
+    case "$_nl" in /*) ;; *) _nl="$PWD/$_nl" ;; esac
+    _saved_ifs=$IFS
+    IFS='/'
+    set -f
+    # 故意不带引号：按 / 拆段
+    set -- $_nl
+    set +f
+    IFS=$_saved_ifs
+    _out=
+    for _s do
+        case "$_s" in
+            ""|.) ;;
+            ..) _out=${_out%/*} ;;
+            *) _out="$_out/$_s" ;;
+        esac
+    done
+    printf '%s\n' "${_out:-/}"
+}
+
 pkg_apply() {
     PA_PKG=""; PA_FMT=""; PA_APP=""; PA_ENV=""; PA_ROLLBACK=0; PA_SHA256=""; PA_STAGE=""
     # 安装腿超时界（AOT ExecTimeoutMilliseconds 同名同缝）：非数字/零/缺席按默认
@@ -526,7 +826,9 @@ pkg_apply() {
     case "$PA_PKG" in /*) ;; *) PA_PKG="$PWD/$PA_PKG" ;; esac
     case "$PA_APP" in /*) ;; *) PA_APP="$PWD/$PA_APP" ;; esac
     case "$PA_ENV" in "") ;; /*) ;; *) PA_ENV="$PWD/$PA_ENV" ;; esac
-    case "$LOG_FILE" in "") ;; /*) ;; *) LOG_FILE="$PWD/$LOG_FILE" ;; esac
+    # --log 与 apply 腿同口径词法归一（AOT GetFullPath 同义）：折 ./.. 段，
+    # 叶拼写必须留给 _pa_log_open 的 -h 链接拒判，绝不能走物理化。
+    [ -z "$LOG_FILE" ] || LOG_FILE="$(norm_lexical "$LOG_FILE")" || exit 3
 
     # 原用户 uid：PKEXEC_UID→SUDO_UID——都不在=本来就 root 直跑，按当前权限 spawn。
     # _pa_uid64 统一"全数字且 int64 内"口径并剥前导零规范化——超界垃圾值按
@@ -571,11 +873,31 @@ pkg_apply() {
         [ -n "$PA_GID" ] || PA_GID=$PA_UID
     fi
 
-    # --env-file 显式给了先校验+读定（三重校验 rc3 拒绝，见 _pa_env_validate）——
-    # 先于装包，与 AOT Run 前置 LoadEnvPairs 同序。uid 解析失败（PA_UID_FAIL=1）
-    # 时跳过校验——重启腿反正会拒（rc6），内容永不进 env，件仍按一次性清走。
+    # --env-file 显式给了先校验+读定（fd 钉住三重校验 rc3 拒绝，见
+    # _pa_env_validate）——先于装包，与 AOT Run 前置 ReadEnvFile 同序。
+    # uid 解析失败（PA_UID_FAIL=1）时跳过校验——重启腿反正会拒（rc6），
+    # 内容永不进 env；件未被读定故 _pa_env_cleanup 清件闸不放行（拒绝的
+    # 路径不归我们删——校验失败仍删件即"root 删任意件"原语）。
     if [ -n "$PA_ENV" ] && [ "$PA_UID_FAIL" = 0 ]; then
-        _pa_env_validate || { _pa_env_cleanup; exit 3; }
+        _pa_env_validate || exit 3
+    fi
+
+    # --log 与 env 件同域：提权侧 argv 给的写路径前置复核（件在=普通件+
+    # 属主==调用 uid；件不在=父目录调用者可写）——违规（异主件/链接/父目录
+    # 不可写）rc3 拒；良性不可写（父目录不存在）WARN 降级续行不写未验件
+    # （AOT TryOpenLogFile 两级同口径）。_pa_log_done 预置让 log() 不再懒开。
+    if [ -n "$LOG_FILE" ]; then
+        _pa_log_done=1
+        _pa_log_open
+        _lr=$?
+        if [ "$_lr" = 2 ]; then
+            _LOG_BAD=1
+        elif [ "$_lr" != 0 ]; then
+            echo "bundler-updater: --log '$LOG_FILE' is not a writable file owned by the calling user." >&2
+            pkg_usage
+            _pa_env_cleanup
+            exit 3
+        fi
     fi
 
     # 客户端验签→root 读件的 TOCTOU 收口：包先复制进 root 私有临时目录，
@@ -845,29 +1167,6 @@ norm_parent() {
     printf '%s/%s\n' "${_nr%/}" "$_nb"
 }
 
-# 父目录缺席时物理解析走不通——退回词法折叠消掉 ./.. 段，
-# 否则 .. 留字面会绕开嵌套判，而 retain 的 mkdir -p 又恰好把逃逸路径做实。
-norm_lexical() {
-    _nl=$1
-    case "$_nl" in /*) ;; *) _nl="$PWD/$_nl" ;; esac
-    _saved_ifs=$IFS
-    IFS='/'
-    set -f
-    # 故意不带引号：按 / 拆段
-    set -- $_nl
-    set +f
-    IFS=$_saved_ifs
-    _out=
-    for _s do
-        case "$_s" in
-            ""|.) ;;
-            ..) _out=${_out%/*} ;;
-            *) _out="$_out/$_s" ;;
-        esac
-    done
-    printf '%s\n' "${_out:-/}"
-}
-
 [ -n "$INSTALL_DIR" ] || { echo "bundler-updater: --install-dir is required." >&2; exit 2; }
 [ "$ROLLBACK" = 1 ] || [ -n "$PAYLOAD_DIR" ] || { echo "bundler-updater: --payload is required unless --rollback." >&2; exit 2; }
 INSTALL_RAW=$INSTALL_DIR
@@ -889,7 +1188,24 @@ INSTALL_BASE=${INSTALL_DIR%/}
 [ -z "$RETAIN_DIR" ] || RETAIN_CMP="$(norm_path "$RETAIN_DIR")" || exit 2
 # 重启目标与日志同样按调用方 cwd 规范化成绝对路径——脚本的工作目录不是用户的 cwd。
 [ -z "$APP_PATH" ] || APP_PATH="$(norm_path "$APP_PATH")" || exit 2
-[ -z "$LOG_FILE" ] || LOG_FILE="$(norm_path "$LOG_FILE")" || exit 2
+# LOG_FILE 不能走 norm_path——逐段 resolve_link 会把 --log 的叶链接物理化成
+# 目标件，链接拒判（_pa_log_open -h/AOT O_NOFOLLOW→ELOOP）被整体绕过。
+# 词法归一即可（AOT Path.GetFullPath 同口径：消 ./.. 段不动链接）。
+[ -z "$LOG_FILE" ] || LOG_FILE="$(norm_lexical "$LOG_FILE")" || exit 2
+# --log 与 pkg-apply 同域校验（apply 也可能在提权语境下被拉起）：违规
+# rc2 拒；良性不可写 WARN 降级续行（AOT TryOpenLogFile 两级同口径）。
+# _pa_log_done 预置让 log() 不再懒开。
+if [ -n "$LOG_FILE" ]; then
+    _pa_log_done=1
+    _pa_log_open
+    _lr=$?
+    if [ "$_lr" = 2 ]; then
+        _LOG_BAD=1
+    elif [ "$_lr" != 0 ]; then
+        echo "bundler-updater: --log '$LOG_FILE' is not a writable file owned by the calling user." >&2
+        exit 2
+    fi
+fi
 [ -n "$BACKUP_DIR" ] || BACKUP_DIR="${INSTALL_BASE}.bundler-backup"
 # 备份比较名一律全物理化——默认备份位同样可能预置叶链（与 RETAIN_CMP 物理名不同名会同址逃逸）。
 BACKUP_CMP="$(norm_path "$BACKUP_DIR")" || exit 2

@@ -8,6 +8,10 @@ namespace DotNet.Bundler.MacApp;
 
 internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : IBundleBackend
 {
+    // 与 MacDmg/MacPkg 后端同款可桩宿主闸——签名宿主门禁（codesign 仅 mac
+    // 宿主）测试时桩 true 让编排/校验腿在非 mac 宿主可执行。
+    internal static Func<bool>? HostCheck;
+
     private static readonly HashSet<string> ReservedTopLevelNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "MacOS", "Resources", "Frameworks", "Info.plist", "PkgInfo"
@@ -61,6 +65,18 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
                 executablesDirectory, update, item.Target.Target);
         }
 
+        // 后端自产件同样登记撞名簿——用户 resource/contents 显式指向
+        // <iconFileName> 或 Assets.car 时走标准冲突错误，不被后写的图标/编目静默覆盖。
+        var iconFileName = metadata.IconFileName;
+        if (bundle.Icons.Any(IsBitmapIcon) && iconFileName is not null)
+        {
+            destinations.Add(Path.GetFullPath(Path.Combine(resourcesDirectory, iconFileName)));
+        }
+        if (bundle.Icons.Any(IsAssetCatalogInput))
+        {
+            destinations.Add(Path.GetFullPath(Path.Combine(resourcesDirectory, "Assets.car")));
+        }
+
         var executablePath = Path.Combine(executablesDirectory, item.MainExecutable);
         if (!File.Exists(executablePath))
         {
@@ -109,7 +125,6 @@ internal sealed class MacAppBundleBackend(MacAppBundleConfiguration settings) : 
 
         var iconInputs = bundle.Icons.Select(Path.GetFullPath).ToArray();
         var bitmapIcons = iconInputs.Where(IsBitmapIcon).ToArray();
-        var iconFileName = metadata.IconFileName;
         if (bitmapIcons.Length > 0 && iconFileName is not null)
         {
             plistValues["CFBundleIconFile"] = iconFileName;

@@ -76,6 +76,14 @@ public static class UpdateSignatureVerifier
         if (signature.Length == 64)
         {
             yield return ToDer(signature);
+            // 恰 64B 的 DER 输入会被"长度=P1363"先判吞没——再补"按 DER 解出
+            // P1363"候选（r/s 高位恰使 DER 总长落 64 的歧义形；ToP1363 对
+            // 64B 输入先按 DER 试解、失败才按 P1363 直通）。
+            var decoded = ToP1363(signature);
+            if (!ReferenceEquals(decoded, signature))
+            {
+                yield return decoded;
+            }
         }
         else if (signature.Length >= 8 && signature[0] == 0x30)
         {
@@ -96,14 +104,28 @@ public static class UpdateSignatureVerifier
     // IEEE-P1363（r||s 定长拼接）↔ DER（SEQUENCE{INTEGER r, INTEGER s}）双向归一。
     public static byte[] ToP1363(byte[] signature)
     {
-        if (signature.Length == 64)
+        // 恰 64B 的歧义形：0x30 起头先按 DER 试解（DER 签名 r/s 高位恰使
+        // 总长落 64 时不该被"长度=P1363"先判吞没）；解不出按 P1363 直通。
+        if (signature.Length == 64 && signature[0] != 0x30)
         {
             return signature;
         }
-        // DER: 30 <len> 02 <rlen> <r> 02 <slen> <s> ——P-256 签名总长 ≤72B，
-        // DER 恒为短式长度；严收"长度字节=总长-2"的精确形状：非最短长式
-        //（0x81）与尾随垃圾同属远端可控输入的畸形面，一律拒——
-        // 严解不为兼容留缝（本链签名件恒由 Bundler 侧产出）。
+        try
+        {
+            return DecodeDer(signature);
+        }
+        catch (InvalidOperationException) when (signature.Length == 64)
+        {
+            return signature;
+        }
+    }
+
+    // DER: 30 <len> 02 <rlen> <r> 02 <slen> <s> ——P-256 签名总长 ≤72B，
+    // DER 恒为短式长度；严收"长度字节=总长-2"的精确形状：非最短长式
+    //（0x81）与尾随垃圾同属远端可控输入的畸形面，一律拒——
+    // 严解不为兼容留缝（本链签名件恒由 Bundler 侧产出）。
+    private static byte[] DecodeDer(byte[] signature)
+    {
         if (signature.Length < 8 || signature[0] != 0x30 ||
             signature[1] != signature.Length - 2)
         {

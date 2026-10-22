@@ -16,7 +16,9 @@ internal sealed class AlpineApkBundleBackend(AlpineApkBundleConfiguration settin
     public Task<IReadOnlyList<BundleArtifact>> BuildAsync(
         BundleBuildContext context, CancellationToken cancellationToken)
     {
-        var result = ApkPackageWriter.Build(context.Configuration, context.Item, settings, context.Logger);
+        var result = ApkPackageWriter.Build(
+            context.Configuration, context.Item, settings,
+            context.WorkDirectory, context.Logger, cancellationToken);
         return Task.FromResult<IReadOnlyList<BundleArtifact>>(
             [new BundleArtifact(Format, context.Item.Target.Target, result.Path)]);
     }

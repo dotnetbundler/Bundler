@@ -56,7 +56,7 @@ public sealed class ArchiveExtractorTests : TempBase
             [
                 new TarEntry { Name = "pkg/", Kind = TarEntryKind.Directory, Mode = 493 },
                 new TarEntry { Name = "pkg/blob.bin", Kind = TarEntryKind.File, Mode = 420, Content = "bz"u8.ToArray() },
-            ]);
+            ], TestContext.Current.CancellationToken);
         }
         var staging = Path.Combine(Root, "staging2");
 

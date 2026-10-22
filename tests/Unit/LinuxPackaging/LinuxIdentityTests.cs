@@ -61,6 +61,10 @@ public sealed class LinuxIdentityTests
             new DebBundleConfiguration { Epoch = "2", Release = "9" }));
         Assert.Equal("1.2.3", DebVersion.Map("1.2.3",
             new DebBundleConfiguration { Release = "" })); // 空 release 即裸 upstream
+        // 空 release + epoch：早退路不得静默丢 epoch 段（回归——旧实现
+        // Release="" 在 epoch 拼装前 return）。
+        Assert.Equal("2:1.2.3", DebVersion.Map("1.2.3",
+            new DebBundleConfiguration { Epoch = "2", Release = "" }));
     }
 
     [Fact]

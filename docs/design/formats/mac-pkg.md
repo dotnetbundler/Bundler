@@ -34,7 +34,7 @@
 - 组件包/分发包全链（`expand-full`/`xar` 结构断言）；welcome/license/conclusion 页（`.txt`/`.html`/`.rtf`，license 复用公共 `LicenseFile`）；分发标题。
 - `system`/`current-user-home` 双域；per-user 域非管理员真实安装 + 收据断言；system 域 sudo `installer` 真装/卸载已由集成腿实证。
 - Developer ID Installer 签名：组件包 `pkgbuild --sign --timestamp`、分发包 `productsign --sign --timestamp`（两条签名链都带 Apple 时间戳）；`"-"` ad-hoc **明确拒绝**（`.pkg` 无 ad-hoc 等价物）；临时钥匙串导入/销毁与凭证解析复用 `Bundler.MacApp` 的 `MacSigningSupport`；无效身份真实失败已验。
-- `.pkg` 公证接线（`notarytool submit` 直收 `.pkg` + `stapler`；默认关；凭证三模式与 `APPLE_*` 回退同 `.app`）——**installer 包是 Gatekeeper 实际验签对象**（与 `.dmg` 结论相反）。
+- `.pkg` 公证接线（`notarytool submit` 直收 `.pkg` + `stapler`；默认关；凭证三模式与 `APPLE_*` 回退同 `.app`）——**installer 包是 Gatekeeper 实际验签对象**（与 `.dmg` 结论相反）；`.pkg` 公证前置要求内层 `.app` 签名开 `HardenedRuntime`（notary 服务端拒收未硬化签名件，预检拦在扇出前）。
 - `ScriptsDirectory` 专家旋钮（默认关）：`pkgbuild --scripts` 原样收目录，`postinstall` 在 per-user 真装中执行已验。
 - 覆盖升级实测（收据版本更新）；`macos-x86_64` 产物结构与 CI 运行态实测；universal 通用目标可产。
 

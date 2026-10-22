@@ -3,16 +3,20 @@ using System.Text;
 namespace DotNet.Bundler.Updater;
 
 /// <summary>
-/// 最小 POSIX ustar 提取器：只读本仓 TarWriter 的产面（prefix 长名、pax `path=`、
-/// GNU 'L' 续名防兼容），普通文件/目录/符号链接三型，块到块流式，零依赖。
+/// 最小 POSIX ustar 提取器：只读本仓 TarWriter 的产面（prefix 长名、pax `path=`/
+/// `linkpath=`、GNU 'L' 续名防兼容），普通文件/目录/符号链接三型，块到块流式，
+/// 零依赖。linkpath 与 path 同列消费——超长链接目标由 pax 承载而非 ustar 截断值。
 /// </summary>
 internal static class UstarReader
 {
     internal static void Extract(Stream stream, string destinationRoot, Action<string>? log = null)
     {
         var header = new byte[512];
-        var longName = (string?)null;   // GNU 'L' 续名
-        var paxPath = (string?)null;    // pax path= 覆盖
+        var longName = (string?)null;    // GNU 'L' 续名
+        var longLink = (string?)null;    // GNU 'K' 长链名
+        var paxPath = (string?)null;     // pax path= 覆盖
+        var paxLinkPath = (string?)null; // pax linkpath= 覆盖（>100B 链接目标）
+        var globalLinkPath = (string?)null; // pax 'g' 全局 linkpath——后续条目默认
         while (true)
         {
             if (!ReadBlock(stream, header))
@@ -28,22 +32,57 @@ internal static class UstarReader
             var mode = (int)ReadOctal(header, 100, 8);
             var type = (char)header[156];
             var prefix = ReadString(header, 345, 155);
+
+            // 伪条目只累积不复位——POSIX/bsdtar 口径是挂起覆盖值（pax path/
+            // linkpath、GNU 续名/续链名）跨伪头合并到下一个真实条目，同键
+            // 后写胜；'g' 全局头落在所有后续条目默认层。伪条目处复位会让
+            // x(linkpath)→L→'2' 构造档的覆盖值丢在半空。
+            switch (type)
+            {
+                case 'x': // pax：数据块是 "len key=value\n" 记录流，取 path=/linkpath=
+                {
+                    var (path, linkPath) = ReadPaxOverrides(stream, size);
+                    if (path is not null)
+                    {
+                        paxPath = path;
+                    }
+                    if (linkPath is not null)
+                    {
+                        paxLinkPath = linkPath;
+                    }
+                    continue;
+                }
+                case 'g': // pax 全局头：linkpath 落到后续条目默认位（per-x 覆盖之）
+                {
+                    var (_, linkPath) = ReadPaxOverrides(stream, size);
+                    if (linkPath is not null)
+                    {
+                        globalLinkPath = linkPath;
+                    }
+                    continue;
+                }
+                case 'L': // GNU 续名：数据块即文件名
+                    longName = ReadDataString(stream, size);
+                    continue;
+                case 'K': // GNU 长链名：数据块即下一条目的链接目标
+                    longLink = ReadDataString(stream, size);
+                    continue;
+            }
+
             var fullName = paxPath ?? longName ??
                 (prefix.Length > 0 ? prefix + "/" + name : name);
+            // 消费端优先级与 bsdtar 对齐：per-x linkpath > K 长链名 > g 全局 > 字段。
+            var linkTargetOverride = paxLinkPath ?? longLink ?? globalLinkPath;
             paxPath = null;
+            paxLinkPath = null;
             longName = null;
+            longLink = null;
 
             switch (type)
             {
-                case 'x': // pax：数据块是 "len key=value\n" 记录流，只取 path=
-                    paxPath = ReadPaxPath(stream, size);
-                    break;
-                case 'L': // GNU 续名：数据块即文件名
-                    longName = ReadDataString(stream, size);
-                    break;
-                case '2': // 符号链接：mode 0755，linkname@100..200
+                case '2': // 符号链接：mode 0755，pax/GNU 覆盖值优先于 ustar 截断字段
                 {
-                    var target = ReadString(header, 157, 100);
+                    var target = linkTargetOverride ?? ReadString(header, 157, 100);
                     SkipData(stream, size);
                     var linkPath = SafePath(destinationRoot, fullName);
                     Directory.CreateDirectory(Path.GetDirectoryName(linkPath)!);
@@ -152,7 +191,10 @@ internal static class UstarReader
         }
     }
 
-    private static string? ReadPaxPath(Stream stream, long size)
+    // "len key=value\n" 记录流——len 计的是字节数，多字节名按字符切会越界。
+    // 只取本仓产面用到的两个键：path= 覆盖名、linkpath= 覆盖链接目标；
+    // 纯元数据记录返回 (null,null)，调用侧 ?? 回落 ustar 字段。
+    private static (string? Path, string? LinkPath) ReadPaxOverrides(Stream stream, long size)
     {
         var data = new byte[size];
         var read = 0;
@@ -163,16 +205,20 @@ internal static class UstarReader
             read += n;
         }
         SkipPadding(stream, size);
-        // "len key=value\n" 记录流——len 计的是字节数，多字节名按字符切会越界。
-        // 无 path= 的纯元数据记录返回 null，调用侧的 ?? 回落到 ustar 名段。
+        string? path = null;
+        string? linkPath = null;
         foreach (var record in ParsePaxRecords(data))
         {
             if (record.StartsWith("path=", StringComparison.Ordinal))
             {
-                return record.Substring(5);
+                path = record.Substring(5);
+            }
+            else if (record.StartsWith("linkpath=", StringComparison.Ordinal))
+            {
+                linkPath = record.Substring(9);
             }
         }
-        return null;
+        return (path, linkPath);
     }
 
     private static IEnumerable<string> ParsePaxRecords(byte[] data)
@@ -282,7 +328,10 @@ internal static class UstarReader
     {
         var header = new byte[512];
         string? paxPath = null;
+        string? paxLinkPath = null;
         string? longName = null;
+        string? longLink = null;
+        string? globalLinkPath = null;
         while (ReadBlock(stream, header))
         {
             if (IsZeroBlock(header))
@@ -293,21 +342,57 @@ internal static class UstarReader
             var size = ReadOctal(header, 124, 12);
             var type = (char)header[156];
             var prefix = ReadString(header, 345, 155);
-            var fullName = paxPath ?? longName ??
-                (prefix.Length > 0 ? prefix + "/" + name : name);
-            paxPath = null;
-            longName = null;
+
+            // 与 Extract 同口径：伪条目累积覆盖值，真实条目消费时复位——
+            // 预扫必须按消费端（bsdtar/managed）的合并语义判定，x→L→'2'、
+            // 连续 x、'g' 全局头或 'K' 长链名的逃逸值都不能被伪头次序骗丢。
             switch (type)
             {
                 case 'x':
-                    paxPath = ReadPaxPath(stream, size);
-                    break;
+                {
+                    var (path, linkPath) = ReadPaxOverrides(stream, size);
+                    if (path is not null)
+                    {
+                        paxPath = path;
+                    }
+                    if (linkPath is not null)
+                    {
+                        paxLinkPath = linkPath;
+                    }
+                    continue;
+                }
+                case 'g':
+                {
+                    var (_, linkPath) = ReadPaxOverrides(stream, size);
+                    if (linkPath is not null)
+                    {
+                        globalLinkPath = linkPath;
+                    }
+                    continue;
+                }
                 case 'L':
                     longName = ReadDataString(stream, size);
-                    break;
+                    continue;
+                case 'K':
+                    longLink = ReadDataString(stream, size);
+                    continue;
+            }
+
+            var fullName = paxPath ?? longName ??
+                (prefix.Length > 0 ? prefix + "/" + name : name);
+            var linkTargetOverride = paxLinkPath ?? longLink ?? globalLinkPath;
+            paxPath = null;
+            paxLinkPath = null;
+            longName = null;
+            longLink = null;
+
+            switch (type)
+            {
                 case '2':
                 {
-                    var target = ReadString(header, 157, 100);
+                    // 与 Extract 同取值源——pax/GNU 覆盖值存在时 ustar 字段是
+                    // 截断值，不看覆盖值会让逃逸目标混过预扫、由消费端按真值物化。
+                    var target = linkTargetOverride ?? ReadString(header, 157, 100);
                     SkipData(stream, size);
                     if (LinkEscapesRoot(target, Path.Combine(destinationRoot, fullName),
                             destinationRoot))

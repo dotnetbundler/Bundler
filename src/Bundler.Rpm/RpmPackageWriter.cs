@@ -45,7 +45,9 @@ internal static class RpmPackageWriter
         BundleConfiguration bundle,
         BundlePlanItem item,
         RpmBundleConfiguration settings,
-        IBundleLogger logger)
+        string workDirectory,
+        IBundleLogger logger,
+        CancellationToken cancellationToken = default)
     {
         // 与门面 Validate 同一条校验链——直调 writer 也得到一致异常契约。
         RpmValidation.Settings(settings, bundle);
@@ -58,11 +60,11 @@ internal static class RpmPackageWriter
         var vendor = resolved.Vendor;
 
         var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, settings, logger);
-        // cpio 直写 gzip→输出目录旁的临时文件（/tmp 小卷不堵构建——目标目录
+        // cpio 直写 gzip→workDirectory 临时文件（/tmp 小卷不堵构建——输出卷
         // 反正得装下成品），全程不驻内存；未压缩 cpio 的尺寸与 sha256
         // （PAYLOADSIZE / PAYLOADDIGESTALT）由穿透流边写边算。
         Directory.CreateDirectory(item.OutputDirectory);
-        var payloadPath = Path.Combine(item.OutputDirectory,
+        var payloadPath = Path.Combine(workDirectory,
             ".bundler-rpm-" + Guid.NewGuid().ToString("N") + ".cpio.gz");
         try
         {
@@ -74,7 +76,7 @@ internal static class RpmPackageWriter
                 using (var gzip = Gzip.WrapWrite(raw))
                 {
                     var digest = new DigestWriteStream(gzip, cpioHash);
-                    CpioWriter.Write(digest, payload.Select(ToCpioEntry).ToList());
+                    CpioWriter.Write(digest, payload.Select(ToCpioEntry).ToList(), cancellationToken);
                     cpioSize = digest.BytesWritten;
                     digest.FinishHash();
                 }
@@ -102,7 +104,8 @@ internal static class RpmPackageWriter
                     "Signing package (RPMSIGTAG_RSA + RPMSIGTAG_PGP).");
             }
             var signatureHeader = RpmHeaderWriter.Write(SignatureEntries(
-                mainHeader, compressedSize, cpioSize, payloadPath, rsaSignature, pgpSignature), 62);
+                mainHeader, compressedSize, cpioSize, payloadPath, rsaSignature, pgpSignature,
+                cancellationToken), 62);
             signatureHeader = Align8(signatureHeader);
 
             var fileName = packageName + "-" + mapped.Version + "-" + mapped.Release +
@@ -133,14 +136,14 @@ internal static class RpmPackageWriter
             }
             catch
             {
-                TryDelete(outputPath);
-                TryDelete(outputPath + ".sha256");
+                FileTree.TryDeleteFile(outputPath);
+                FileTree.TryDeleteFile(outputPath + ".sha256");
                 throw;
             }
         }
         finally
         {
-            TryDelete(payloadPath);
+            FileTree.TryDeleteFile(payloadPath);
         }
     }
 
@@ -216,7 +219,7 @@ internal static class RpmPackageWriter
 
     private static List<RpmHeaderWriter.Entry> SignatureEntries(
         byte[] mainHeader, long compressedSize, long cpioSize, string payloadPath,
-        byte[]? rsaSignature, byte[]? pgpSignature)
+        byte[]? rsaSignature, byte[]? pgpSignature, CancellationToken cancellationToken)
     {
         // RPMSIGTAG_SIZE = main header bytes + compressed payload bytes
         var packageSize = (long)mainHeader.Length + compressedSize;
@@ -229,6 +232,7 @@ internal static class RpmPackageWriter
             int read;
             while ((read = payloadStream.Read(chunk, 0, chunk.Length)) > 0)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 md5.TransformBlock(chunk, 0, read, null, 0);
             }
         }
@@ -271,6 +275,16 @@ internal static class RpmPackageWriter
         }
         return entries;
     }
+
+    /// <summary>
+    /// RPMTAG_SIZE（记全部已装文件总字节）：单件 &gt;2GiB 已在 AddFile 拒，但件数
+    /// 一多总和照样越 int32——超出时换 RPM 4.15+ 的 LONGSIZE 变体（签名头
+    /// RPMSIGTAG_SIZE/LONGSIZE 同款取舍），不再 checked 溢出炸异常。
+    /// </summary>
+    internal static RpmHeaderWriter.Entry SizeEntry(long installedSize) =>
+        installedSize <= int.MaxValue
+            ? RpmHeaderWriter.Int32s(1009, (int)installedSize)             // SIZE
+            : RpmHeaderWriter.Int64s(5009, installedSize);                 // LONGSIZE
 
     private static List<RpmHeaderWriter.Entry> MainHeaderEntries(
         BundleConfiguration bundle,
@@ -347,7 +361,6 @@ internal static class RpmPackageWriter
             RpmHeaderWriter.Strings(1005, [DescriptionOf(bundle)], type: 9), // DESCRIPTION i18n
             RpmHeaderWriter.Int32s(1006, (int)BuildTime),                  // BUILDTIME
             RpmHeaderWriter.Str(1007, "bundler-build"),                    // BUILDHOST
-            RpmHeaderWriter.Int32s(1009, checked((int)installedSize)),     // SIZE
             RpmHeaderWriter.Str(1011, vendor),                             // VENDOR
             RpmHeaderWriter.Str(1014, settings.License ?? "Unspecified"),  // LICENSE
             RpmHeaderWriter.Str(1021, "linux"),                            // OS
@@ -381,6 +394,7 @@ internal static class RpmPackageWriter
             RpmHeaderWriter.Int32s(5011, 8),                               // FILEDIGESTALGO = sha256
             RpmHeaderWriter.Str(5062, "utf-8"),                            // ENCODING
         };
+        entries.Add(SizeEntry(installedSize));
         var group = settings.Group ?? "Unspecified";
         if (group.Length > 0)
         {
@@ -589,7 +603,9 @@ internal static class RpmPackageWriter
                 ArchivePath = path,
                 Mode = 0xA000 | 511 /* 0120777 */,
                 LinkTarget = linkTarget,
-                Size = linkTarget.Length
+                // cpio 体按 UTF-8 字节写（FileBytes 同源）、FILEDIGESTS 也哈希
+                // UTF-8 字节——字符数在非 ASCII 目标下与两者同时错位。
+                Size = Encoding.UTF8.GetByteCount(linkTarget)
             });
         }
 
@@ -831,10 +847,5 @@ internal static class RpmPackageWriter
         }
         using var stream = File.OpenRead(entry.SourcePath!);
         return Hashes.ToLowerHex(sha256.ComputeHash(stream));
-    }
-
-    private static void TryDelete(string path)
-    {
-        try { if (File.Exists(path)) File.Delete(path); } catch { /* best effort */ }
     }
 }

@@ -138,7 +138,9 @@ jobs:
     needs: select
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 180
+    # 健康腿实证 ~45min（最慢的 windows-arm 含 MSI 真装）；90min=2 倍余量，
+    # 超过即属 runner 劣化/挂死病理区——早判死比烧满时限省 CI 时长。
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:

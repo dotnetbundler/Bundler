@@ -1,7 +1,8 @@
-namespace DotNet.Bundler.Nsis;
+namespace DotNet.Bundler.Core;
 
-// Installer and shortcut paths are Windows-side artifacts: they must be validated
-// against Windows file-name rules no matter which host runs the backend.
+// Installer/shortcut/package paths are Windows-side artifacts: they must be
+// validated against Windows file-name rules no matter which host runs the
+// backend — never use Path.GetInvalidFileNameChars() (host-dependent).
 internal static class WindowsFileNames
 {
     private const string InvalidCharacters = "<>:\"/\\|?*";
@@ -30,4 +31,13 @@ internal static class WindowsFileNames
     internal static string Sanitize(string value) =>
         new(value.Select(character =>
             InvalidCharacters.IndexOf(character) >= 0 || char.IsControl(character) ? '_' : character).ToArray());
+
+    // 清洗成可直接落盘的 Windows 名：非法字符→'_'、首尾空白与尾点剥除、
+    // 设备保留名/纯点/空结果回落 fallback——"CON"→"CON.exe" 这类 Windows
+    // 拒绝创建的名字不会漏出。
+    internal static string SafeFileName(string value, string fallback)
+    {
+        var result = Sanitize(value).Trim().TrimEnd('.', ' ');
+        return result.Length == 0 || IsReservedDeviceName(result) ? fallback : result;
+    }
 }

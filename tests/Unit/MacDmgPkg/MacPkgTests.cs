@@ -1229,8 +1229,10 @@ public sealed class MacPkgTests : TempBase
         var output = Temp("DotNet.Bundler.Tests").FullName;
         var requests = new List<ToolRunner.Request>();
         var previousHost = MacPkgBundleBackend.HostCheck;
+        var previousAppHost = MacAppBundleBackend.HostCheck;
         var previous = ToolRunner.Handler;
         MacPkgBundleBackend.HostCheck = () => true;
+        MacAppBundleBackend.HostCheck = () => true;
         ToolRunner.Handler = (request, _) =>
         {
             requests.Add(request);
@@ -1249,15 +1251,26 @@ public sealed class MacPkgTests : TempBase
         };
         try
         {
-            await new MacPkgBundler(new MacPkgBundleConfiguration
-                {
-                    Signing = new MacPkgSigningConfiguration
+            // pkg 公证要求内层 .app 代码签名开 hardened runtime（notary 拒未硬化
+            // 签名件）——测试配置如实反映该必需前置。
+            await new MacPkgBundler(
+                    new MacPkgBundleConfiguration
                     {
-                        Identity = "Developer ID Installer: Example",
-                        Notarize = true,
-                        KeychainProfile = "test-profile"
-                    }
-                })
+                        Signing = new MacPkgSigningConfiguration
+                        {
+                            Identity = "Developer ID Installer: Example",
+                            Notarize = true,
+                            KeychainProfile = "test-profile"
+                        }
+                    },
+                    new MacAppBundleConfiguration
+                    {
+                        Signing = new MacAppSigningConfiguration
+                        {
+                            Identity = "Developer ID Application: Example",
+                            HardenedRuntime = true
+                        }
+                    })
                 .BuildAsync(PkgConfiguration(input, output), TestContext.Current.CancellationToken);
             var submit = requests.Single(request =>
                 request.Executable == "xcrun" && request.Arguments.Contains("submit"));
@@ -1273,6 +1286,7 @@ public sealed class MacPkgTests : TempBase
         {
             ToolRunner.Handler = previous;
             MacPkgBundleBackend.HostCheck = previousHost;
+            MacAppBundleBackend.HostCheck = previousAppHost;
             Cleanup(input, output);
         }
     }

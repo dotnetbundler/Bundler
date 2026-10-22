@@ -14,20 +14,4 @@ internal static class WaitFor
         }
         Assert.Fail(message);
     }
-
-    // 限定窗口内"不得发生"：用于 open -W 被隔离/最低系统版本拒绝等"应保持不成立"腿。
-    // 返回 true 表示条件在窗口内一直未成立（即操作被正确拦下）。
-    public static bool RemainsFalse(Func<bool> condition, int windowSeconds)
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(windowSeconds);
-        while (DateTime.UtcNow < deadline)
-        {
-            if (condition())
-            {
-                return false;
-            }
-            Thread.Sleep(500);
-        }
-        return true;
-    }
 }

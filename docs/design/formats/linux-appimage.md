@@ -10,7 +10,7 @@
 - **不引入 linuxdeploy**（其职责是 gtk/gstreamer 等依赖拷贝编排，超产品边界）；契约：依赖须打进 publish 载荷。
 - **构建宿主限 Linux**（appimagetool 是 Linux ELF，与 deb/rpm 任意宿主可产不同）；可交叉——x86_64 宿主可产 aarch64 产物（嵌入 runtime-aarch64，实测 e_machine=0xb7）。
   `linux-x86`/i686 目标与 `Architecture=i686` 覆盖均明确拒绝（无随包 runtime，不承诺）。
-- AppDir 载荷经共享 `PayloadSource` 枚举落盘：输入树内符号链接在 AppDir 内重建为相对链接（mksquashfs 原样保留），外指/悬空链接与资源目的地越界打包前拒绝——与 deb/rpm/apk 同一契约。
+- AppDir 载荷经共享 `PayloadSource` 枚举落盘：输入树内符号链接在 AppDir 内重建为相对链接（mksquashfs 原样保留），外指/悬空链接与资源目的地越界打包前拒绝——与 deb/rpm/apk 同一契约（含"包内可达"核查：目标须在出件集中物化）。
 - 一律以 `APPIMAGE_EXTRACT_AND_RUN=1` 调工具（容器/CI 常无 FUSE）。
 - 压缩**仅 zstd**：pinned appimagetool 的 mksquashfs 只编译进 zstd（gzip/xz 实测报不支持），不暴露压缩旋钮。
 - AppDir 结构：`usr/` 子树复用 `Bundler.Core` 共享 freedesktop 生成器（`.desktop`+hicolor+metainfo+`usr/lib/<pkg>/`+`usr/bin` 相对链接）；根级 `AppRun` 为**受控生成脚本** `exec "$APPDIR/usr/bin/<main>" "$@"`（可读可审，非预编译二进制）；根 `.desktop` 是指向 staged 件的符号链接，`Exec`/`Icon` 按 AppDir 约定修正。

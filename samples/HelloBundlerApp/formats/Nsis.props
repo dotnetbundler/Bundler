@@ -47,8 +47,11 @@
     <BundlerNsisLanguageFile Include="$(HelloBundlerAppAssets)nsis/SimpChinese.nsh" Language="SimpChinese" />
   </ItemGroup>
 
+  <!-- BeforeTargets 三钩：CoreCompile 盖常规编译打包路，BundleDesktopApplication
+       盖 publish 钩打包路，BundlerBundle 盖 -t:BundlerBundle + BundlerInputDir
+       只打包路（该路不编译不发布，前两钩全不可达）。 -->
   <Target Name="PrepareHelloBundlerNsisArtwork"
-          BeforeTargets="CoreCompile;BundleDesktopApplication"
+          BeforeTargets="CoreCompile;BundleDesktopApplication;BundlerBundle"
           Inputs="$(_HelloBundlerNsisToolsetArchive)"
           Outputs="$(_HelloBundlerNsisArtworkMarker)">
     <Unzip SourceFiles="$(_HelloBundlerNsisToolsetArchive)"

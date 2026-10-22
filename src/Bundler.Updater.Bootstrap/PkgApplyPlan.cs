@@ -53,10 +53,24 @@ internal static class PkgApplyPlan
         }
         // 日志路径同 apply 口径：建委托前按本进程 cwd 绝对化。
         var logFile = options.LogFile is { Length: > 0 } lf ? Path.GetFullPath(lf) : null;
-        var log = BootstrapPlan.CreateLog(logFile);
         try
         {
-            return Apply(options, log);
+            // --log 属提权侧 argv——写路径与 env 件同域复核：件在=普通件且
+            // 属主==调用 uid；件不在=父目录调用者可写。open 钉住 inode 的
+            // 单一 fd 全程追加写，check→write 换件窗归零（sh exec 9>>+
+            // fstat /dev/fd/9 同口径）。开件/校验失败降级 WARN+续行不写
+            // 文件日志——日志是留痕辅助，不可写不该阻断装包（sh log()
+            // _LOG_BAD 同口径）。
+            var callerUid = ResolveCallerUid();
+            var stream = TryOpenLogFile(logFile, callerUid);
+            try
+            {
+                return Apply(options, BootstrapPlan.CreateLog(stream, logFile is not null));
+            }
+            finally
+            {
+                stream?.Dispose();
+            }
         }
         catch (UsageException exception)
         {
@@ -90,11 +104,12 @@ internal static class PkgApplyPlan
         // 复核（st_uid==调用 uid，缺席按本进程 euid）与重启降权两边都要用。
         // AOT vs sh 缺分流项：uid 解析在进程内做不存在"解析器缺席"态——
         // sh 侧 awk 缺席走 PA_UID_FAIL→拒重启（rc6）的分流在 AOT 天然无对应物。
-        var uid = ParseUid(GetEnv("PKEXEC_UID")) ?? ParseUid(GetEnv("SUDO_UID"));
+        var uid = ResolveCallerUid();
         var passwd = uid is { } id ? LookupPasswd(id) : null;
         // SIGKILL 留下的上轮暂存目兜底清扫（finally/EXIT trap 管不到强杀路径）。
         SweepStaleStageDirs();
         var staged = "";
+        var envFileRead = false;
         try
         {
             // --env-file 校验+读定在装包前（sh _pa_env_validate 同位，rc3 拒绝
@@ -104,6 +119,10 @@ internal static class PkgApplyPlan
             // 挂死 root 进程、symlink 可把 root 私有件内容灌进降权 app 的 env
             //（用户经 /proc/<app>/environ 读回）。
             var envLines = ReadEnvFile(options.EnvFile, uid);
+            // 读定（校验+内容全过）才允许 finally 清件——校验被拒的路径
+            // 不归我们删：任意的 --env-file 指向（/etc/shadow 类）在拒绝后
+            // 仍被兜底删件就是"root 删调用方任意件"原语。
+            envFileRead = true;
             // root 侧核验+暂存（客户端验签→root 读件 TOCTOU 收口）：包先复制进
             // root 私有临时目录，--sha256 给了就对暂存副本复核——客户端验签算出的
             // 哈希与 root 实际要装的字节逐位绑定，验后替换窗归零；装期间原路径被
@@ -149,9 +168,13 @@ internal static class PkgApplyPlan
                 CleanupStage(Path.GetDirectoryName(staged)!);
             }
             // --env-file 是客户端 <staging>/pkg-<guid>/session.env 一次性输入——
-            // 消费完（或装失败确定不消费）即删件与 pkg-* 暂存目录；客户端拉起即退
-            // 后删不了，残件兜底在客户端拉起腿退出删余（Exited 钩/速退内联）与 24h staging 清扫。
-            CleanupEnvFile(options.EnvFile);
+            // 读定（校验全过）后才删件与 pkg-* 暂存目录；校验被拒的路径不动
+            //（拒绝路径无条件删会把 rc3 拒绝变"root 删调用方任意件"原语）。
+            // 残件兜底在客户端拉起腿退出删余（Exited 钩/速退内联）与 24h staging 清扫。
+            if (envFileRead)
+            {
+                CleanupEnvFile(options.EnvFile);
+            }
         }
     }
 
@@ -169,8 +192,11 @@ internal static class PkgApplyPlan
                 File.SetUnixFileMode(dir,
                     UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             }
-            catch (Exception)
+            catch (Exception exception)
             {
+                // 0700 是跨用户同名的隐私闸——chmod 失败不该哑掉：装包本身仍可
+                // 安全进行（副本内容与权限无关），但留痕让"私有性失效"可诊断。
+                log($"bundler-updater: warning: could not restrict staging dir permissions: {exception.Message}");
             }
         }
         var staged = Path.Combine(dir, Path.GetFileName(pkg));
@@ -221,7 +247,9 @@ internal static class PkgApplyPlan
             File.Copy(source, staged);
             return;
         }
-        var fd = NativeMethods.OpenWithDeadline(source);
+        // PkgOpenFlags 不带 NOFOLLOW——包路径按 N10 契约跟随链接（sh cp
+        // 同口径），fstat 复核只管 S_IFREG 类型钉住不管链接层。
+        var fd = NativeMethods.OpenWithDeadline(source, NativeMethods.PkgOpenFlags);
         if (fd == NativeMethods.InvalidFd)
         {
             throw new UpdateRejectedException(
@@ -270,27 +298,43 @@ internal static class PkgApplyPlan
     // /tmp 跨进程共享，只动 bundler-pkg-* 本契约名。
     private static void SweepStaleStageDirs()
     {
-        var cutoff = DateTime.UtcNow.AddHours(-24);
-        string tempRoot;
         try
         {
-            tempRoot = Path.GetTempPath();
+            SweepStaleStageDirs(Path.GetTempPath(), DateTime.UtcNow.AddHours(-24));
         }
         catch (Exception)
         {
-            return;
         }
+    }
+
+    // tempRoot 参数化是测试缝——生产侧恒 Path.GetTempPath()。
+    internal static void SweepStaleStageDirs(string tempRoot) =>
+        SweepStaleStageDirs(tempRoot, DateTime.UtcNow.AddHours(-24));
+
+    // cutoff 注入是测试缝——链接名目按自身 mtime（lstat 口径）判龄，注入
+    // 未来截点让新建件也计陈旧，清扫路径确定性可达。
+    internal static void SweepStaleStageDirs(string tempRoot, DateTime cutoff)
+    {
         string[] dirs;
         try
         {
             // sh 腿建 bundler-pkg.XXXX（mktemp -d）、AOT 建 bundler-pkg-<guid>——
-            // 两种本契约名都收（跨实现残件互不漏）。
-            dirs = Directory.GetDirectories(tempRoot, "bundler-pkg*")
+            // 两种本契约名都收（跨实现残件互不漏）。枚举走全量 fs 条目：契约
+            // 名目下冒出来的链接（指向谁家的目录都算）同样按条目自身龄收——
+            // GetLastWriteTimeUtc 对链接取链自身 mtime（lstat 口径，不跟目标）。
+            dirs = Directory.GetFileSystemEntries(tempRoot, "bundler-pkg*")
                 .Where(d =>
                 {
                     var name = Path.GetFileName(d);
-                    return name.StartsWith("bundler-pkg-", StringComparison.Ordinal) ||
-                           name.StartsWith("bundler-pkg.", StringComparison.Ordinal);
+                    if (!name.StartsWith("bundler-pkg-", StringComparison.Ordinal) &&
+                        !name.StartsWith("bundler-pkg.", StringComparison.Ordinal))
+                    {
+                        return false;
+                    }
+                    var attr = File.GetAttributes(d);
+                    // 真目录或任意链接名目才进扫（链→文件/悬空链同为残件名目）；
+                    // 裸常规件不符契约，跳过。
+                    return (attr & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != 0;
                 }).ToArray();
         }
         catch (Exception)
@@ -301,14 +345,111 @@ internal static class PkgApplyPlan
         {
             try
             {
-                if (Directory.GetLastWriteTimeUtc(dir) < cutoff)
+                if (Directory.GetLastWriteTimeUtc(dir) >= cutoff)
                 {
-                    Directory.Delete(dir, recursive: true);
+                    continue;
                 }
+                SweepOne(dir);
             }
             catch (Exception)
             {
             }
+        }
+    }
+
+    // 单目清扫：契约暂存目只装平铺常规件——先 mv 到私有名钉住路径（判龄到
+    // 删件窗内名目被换链的风险归零），再只删条目本体：链接只摘链不跟目标，
+    // 真目录/挂载点出现即整体弃收。root 侧 /tmp 是跨用户共享面——契约名目下
+    // 被塞 FUSE/bind 挂载时递归删会跨界扫挂载树，"发现即弃收"是不跨界语义。
+    private static void SweepOne(string dir)
+    {
+        var held = dir + ".sweep-" + Environment.ProcessId;
+        // 链接名目也进扫：rename 搬链本体不跟目标。先判条目形态——非目非链
+        // 名目是契约外普通件，不动其名（恢复 03b43a8 世系"原件原位留"语义，
+        // 优于直接父版会把普通件改名成 .sweep 残件的形态）；名目 held 撞已
+        // 存在件时 Move 抛异常→上层 catch 跳过、原位留待下轮。有 Directory
+        // 位（真目/链→目）走 Directory.Move，链→文件/悬空链走 File.Move
+        //（File.Move 见 Directory 位即拒）。
+        var srcAttr = File.GetAttributes(dir);
+        if ((srcAttr & (FileAttributes.Directory | FileAttributes.ReparsePoint)) == 0)
+        {
+            return;
+        }
+        if ((srcAttr & FileAttributes.Directory) != 0)
+        {
+            Directory.Move(dir, held);
+        }
+        else
+        {
+            File.Move(dir, held);
+        }
+        try
+        {
+            // mv 后复核名目身份——held 若还是链接（判龄后名目被换链、mv 移的
+            // 是链非目标）只摘链即收工，绝不对链接路径枚举删件。链→目录走
+            // Directory.Delete（unlink 摘链节点），其余链接 File.Delete——
+            // 两路都只摘链不触目标。
+            var heldAttr = File.GetAttributes(held);
+            if ((heldAttr & FileAttributes.ReparsePoint) != 0)
+            {
+                if ((heldAttr & FileAttributes.Directory) != 0)
+                {
+                    Directory.Delete(held);
+                }
+                else
+                {
+                    File.Delete(held);
+                }
+                return;
+            }
+            if ((heldAttr & FileAttributes.Directory) == 0)
+            {
+                // 判格到 Move 之间名目被换成普通件（µs 窗）：held 非链非目
+                // 时搬回原名恢复名目——原名已被新名目占住则弃收；.sweep 名目
+                // 虽在 bundler-pkg* glob 面内，但普通件残件过不了上方 attr
+                // 判格、永不再被收（登记残余，不代位删件）。
+                try
+                {
+                    File.Move(held, dir);
+                }
+                catch (Exception)
+                {
+                }
+                return;
+            }
+            var flat = true;
+            foreach (var entry in Directory.EnumerateFileSystemEntries(held))
+            {
+                var attr = File.GetAttributes(entry);
+                if ((attr & FileAttributes.ReparsePoint) != 0 ||
+                    (attr & FileAttributes.Directory) == 0)
+                {
+                    // 常规件/特殊件 rm 等价 unlink；Windows 目录链接走
+                    // Directory.Delete 非递归只摘点——两侧都不跨条目边界。
+                    if ((attr & FileAttributes.Directory) != 0)
+                    {
+                        Directory.Delete(entry);
+                    }
+                    else
+                    {
+                        File.Delete(entry);
+                    }
+                }
+                else
+                {
+                    flat = false;
+                    break;
+                }
+            }
+            if (flat)
+            {
+                // 非递归 rmdir——循环后仍剩件（枚举竞态新落件）即失败弃收，
+                // 下次扫到原契约名后缀仍在 glob 面内，重试语义不丢。
+                Directory.Delete(held);
+            }
+        }
+        catch (Exception)
+        {
         }
     }
 
@@ -699,6 +840,163 @@ internal static class PkgApplyPlan
             FileAccess.Read);
     }
 
+    // --log 开件：提权侧 argv 给的写路径按"调用者可写"复核（sh _pa_log_open
+    // 同口径）——件在 = open(O_WRONLY|NOFOLLOW) 钉住后 fstat 是普通件且
+    // 属主==调用 uid；件不在 = 父目录调用者可写后 open(CREAT) 钉新件。
+    // 两步 open 区分"既有件/新件"：既有件的属主判据必须严（新件是我们刚
+    // 建的——owner==euid 恒真）；对既有件 owner 判调用 uid 防"root 向
+    // /etc/passwd 类属主非调用者的件追加日志"。返回的 FileStream 钉住同一
+    // inode——其后路径被换成链接/别的件也骗不过追加写。
+    // 任一步不过抛 UsageException——双侧调用面（apply/pkg-apply、AOT/sh）
+    // 统一走 TryOpenLogFile 的 WARN 降级：校验过不开件就不写，不落攻击者
+    // 路径；日志是留痕辅助，开件失败不阻断主流程（sh log() _LOG_BAD 同口径）。
+    internal static FileStream? TryOpenLogFile(string? path, long? callerUid)
+    {
+        if (path is null)
+        {
+            return null;
+        }
+        try
+        {
+            return OpenLogFile(path, callerUid);
+        }
+        catch (LogUnavailableException exception)
+        {
+            // 良性不可写（父目录不存在等）：WARN 一次降级续行——日志是
+            // 留痕辅助不阻断主流程；异主件/符号链接/父目录非调用者可写
+            // 仍走 UsageException 硬拒（rc3/rc2，sh 前置校验同口径）。
+            Console.Error.WriteLine(
+                $"bundler-updater: WARN cannot write log file '{path}' — continuing without file logging ({exception.Message})");
+            return null;
+        }
+    }
+
+    /// <summary>良性"不可写"标记——与 UsageException 的安全违规区分。</summary>
+    internal sealed class LogUnavailableException(string message) : Exception(message);
+
+    internal static FileStream? OpenLogFile(string? path, long? callerUid)
+    {
+        if (path is null)
+        {
+            return null;
+        }
+        if (OperatingSystem.IsWindows())
+        {
+            // Windows 腿只在测试宿主可触达（env 件同款口径）：链接拒判后
+            // Append 模式打开，属主面无可复核项。FileInfo.LinkTarget 不依赖
+            // File.Exists——dangling 链接 Exists=false 但 LinkTarget 仍可读，
+            // 先判链接再开件，否则 dangling 会被 Append 跟随建出目标件
+            //（POSIX 两腿 O_NOFOLLOW→ELOOP 拒的同形攻击面）。
+            try
+            {
+                if (new FileInfo(path).LinkTarget is not null)
+                {
+                    throw new UsageException(
+                        $"--log '{path}' is not a regular file owned by the calling user.");
+                }
+                return new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read);
+            }
+            catch (UsageException)
+            {
+                throw;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                throw new LogUnavailableException(
+                    $"--log '{path}' parent directory does not exist.");
+            }
+            catch (Exception)
+            {
+                throw new UsageException(
+                    $"--log '{path}' is not a writable regular file.");
+            }
+        }
+        var fd = NativeMethods.OpenWithDeadline(path, NativeMethods.LogOpenFlags);
+        if (fd != NativeMethods.InvalidFd)
+        {
+            // 既有件：fstat 已开描述符——校验对象是 open 钉住的同一 inode。
+            // 调用者即 root（CallerIsRoot）时属主复核直通——DAC 覆盖本就
+            // 全域可写，容器/守护语境（euid=0 挂宿主属主目录）刚性属主
+            // 比对只会误拒（musl 冒烟实证）；pkexec 腿 callerUid 是真实
+            // 桌面用户，严格度不变。
+            if (NativeMethods.TryFStat(fd, out var status) &&
+                NativeMethods.IsRegularMode(status) &&
+                (NativeMethods.CallerIsRoot(callerUid) ||
+                 NativeMethods.OwnerMatches(status, callerUid)))
+            {
+                var existing = new FileStream(
+                    new Microsoft.Win32.SafeHandles.SafeFileHandle(fd, ownsHandle: true),
+                    FileAccess.Write);
+                // 追加语义：PAL 旗标集无 O_APPEND——钉 fd 是进程唯一写者，
+                // 开件即 seek 尾即可（与 sh exec 9>> 的 O_APPEND 语义等价）。
+                existing.Position = existing.Length;
+                return existing;
+            }
+            NativeMethods.Close(fd);
+            throw new UsageException(
+                $"--log '{path}' is not a regular file owned by the calling user.");
+        }
+        // 件不在：父目录须"调用者可写"（属主匹配或 o+wx 公共区），其后
+        // open(CREAT) 钉新件——抢建窗内出现的件按属主复核：调用者 uid 或
+        // 本进程 euid（我们刚建）皆可；别的主进程抢建的件属主两不沾则拒。
+        var dir = Path.GetDirectoryName(path);
+        if (dir is null)
+        {
+            throw new UsageException($"--log '{path}' is not a valid path.");
+        }
+        var dfd = NativeMethods.OpenWithDeadline(dir, NativeMethods.DirOpenFlags);
+        if (dfd == NativeMethods.InvalidFd)
+        {
+            if (!Directory.Exists(dir))
+            {
+                // 父路径存在但非目录（普通件/fifo/socket/设备等——Path.Exists
+                // 只判"节点在场"）——与真缺席分流保准确报文（两级同为
+                // LogUnavailable 良性降级，sh `[ -d ]` 同口径）。
+                throw new LogUnavailableException(
+                    Path.Exists(dir)
+                        ? $"--log '{path}' parent path is not a directory."
+                        : $"--log '{path}' parent directory does not exist.");
+            }
+            throw new UsageException(
+                $"--log '{path}' parent directory is not accessible.");
+        }
+        var dirOk = NativeMethods.TryFStat(dfd, out var dstatus);
+        if (dirOk && !NativeMethods.IsDirMode(dstatus))
+        {
+            // 父路径是普通件等非目录：写必败但无安全敏感——良性不可写降级
+            //（sh `[ -d "$_ld" ]` 失败→rc2 良性同口径），与目录不可写的
+            // 违规级区分。
+            NativeMethods.Close(dfd);
+            throw new LogUnavailableException(
+                $"--log '{path}' parent path is not a directory.");
+        }
+        dirOk = dirOk && NativeMethods.DirWritableByCaller(dstatus, callerUid);
+        NativeMethods.Close(dfd);
+        if (!dirOk)
+        {
+            throw new UsageException(
+                $"--log '{path}' parent directory is not writable by the calling user.");
+        }
+        fd = NativeMethods.OpenWithDeadline(path, NativeMethods.LogCreateFlags, 0x1B6 /* 0666 */);
+        if (fd == NativeMethods.InvalidFd)
+        {
+            throw new UsageException(
+                $"--log '{path}' could not be opened for append.");
+        }
+        if (NativeMethods.TryFStat(fd, out var created) &&
+            NativeMethods.IsRegularMode(created) &&
+            (NativeMethods.OwnerMatches(created, callerUid) ||
+             NativeMethods.OwnerMatches(created, null)))
+        {
+            return new FileStream(
+                new Microsoft.Win32.SafeHandles.SafeFileHandle(fd, ownsHandle: true),
+                FileAccess.Write);
+        }
+        NativeMethods.Close(fd);
+        throw new UsageException(
+            $"--log '{path}' is not a regular file owned by the calling user.");
+    }
+
     private static bool IsEnvAssignment(string line)
     {
         var equals = line.IndexOf('=');
@@ -715,6 +1013,11 @@ internal static class PkgApplyPlan
         }
         return true;
     }
+
+    // 调用 uid 解析（PKEXEC_UID→SUDO_UID，缺席=null——OwnerMatches 按
+    // 本进程 euid 兜底）：env 件属主复核、--log 属主复核、重启降权共用。
+    internal static long? ResolveCallerUid() =>
+        ParseUid(GetEnv("PKEXEC_UID")) ?? ParseUid(GetEnv("SUDO_UID"));
 
     // 与 sh 支路 *[!0-9]* 同口径：只收全数字（uid_t 是 uint32，int 装不下；
     // 空白/符号形拒收——sh 侧模式匹配同样拒）。
@@ -1178,11 +1481,26 @@ internal sealed class ExecSpec
 //（arm 紧凑表/generic 表之分消失在 PAL 内部）。
 internal static class NativeMethods
 {
-    // PAL OpenFlags（pal_io.h 定值，与 POSIX 数值无关的固定中间值）：
-    // PAL_O_RDONLY=0x0000 | PAL_O_CLOEXEC=0x0010 | PAL_O_NOFOLLOW=0x0200。
+    // PAL OpenFlags（pal_io.h 定值，与 POSIX 数值无关的固定中间值）。
+    // 可用集以出货运行时 ConvertOpenFlags 掩码为准——v10 pal_io.c 只放行
+    // ACCESS_MODE_MASK(0x000F)|CLOEXEC(0x0010)|CREAT(0x0020)|EXCL(0x0040)|
+    // TRUNC(0x0080)|SYNC(0x0100)|NOFOLLOW(0x0200)；NONBLOCK_*(0x0400/0x0800)
+    // 与 DIRECTORY(0x1000) 是 main 分支后加的枚举，出货版传未知位按 EINVAL
+    // 拒（CI 实证：0x1000 使目录 open 全败）。目录判据由开后 fstat 的
+    // S_ISDIR 闭环，不靠 open 旗标。
     // PAL 旗标集不导 O_NONBLOCK——fifo 阻塞窗由 OpenWithDeadline 的
     // 5s 线程内 open 收口（sh `timeout 5 cat` 同口径）。
     internal const int EnvOpenFlags = 0x0010 | 0x0200;
+    internal const int LogOpenFlags = 0x0001 | 0x0010 | 0x0200;
+    // CREAT 不带 EXCL：抢建窗内出现的件由开后 fstat 按属主（调用 uid 或
+    // 本进程 euid）复核收口；sh 侧更严——noclobber O_EXCL 原子建件 +
+    // dev:ino 比对，窗在 open 一刻归零（本侧 CREAT|NOFOLLOW 对链接已拒，
+    // 残余窗为同主普通件抢建、内容无害等价，故不加 EXCL 保既有件路径）。
+    internal const int LogCreateFlags = LogOpenFlags | 0x0020;
+    internal const int DirOpenFlags = 0x0010 | 0x0200;
+    // 包路径刻意跟随符号链接（sh -f/cp 同口径登记 N10）：包件是调用方
+    // 受托输入不越信任边界，只须 fstat 钉住 S_IFREG 防 fifo/设备换件窗。
+    internal const int PkgOpenFlags = 0x0010;
     internal const int OpenDeadlineMs = 5000;
     internal static readonly IntPtr InvalidFd = new IntPtr(-1);
 
@@ -1190,6 +1508,9 @@ internal static class NativeMethods
     private const int RegularFile = 0x8000; // PAL_S_IFREG
 
     // pal_io.h FileStatus 的同形镜像——PAL 归一化布局，Mode@4/Uid@8 定死。
+    // 尾字段 HardLinkCount 是 main 分支后加项：v10 出货结构止于 UserFlags
+    //（本字段恒读 0），托管缓冲按新头满尺寸预留——未来 runtime 写 120B
+    // 时窄缓冲即被踩尾，方向只能大不能小。
     [StructLayout(LayoutKind.Sequential)]
     internal struct FileStatus
     {
@@ -1210,6 +1531,7 @@ internal static class NativeMethods
         internal long RDev;
         internal long Ino;
         internal uint UserFlags;
+        internal uint HardLinkCount;
     }
 
     [DllImport("libSystem.Native", EntryPoint = "SystemNative_Open", SetLastError = true, CharSet = CharSet.Ansi)]
@@ -1228,7 +1550,14 @@ internal static class NativeMethods
     // 收口（sh `timeout 5 cat` 同口径 5s）——超时按 InvalidFd 拒；被弃
     // 线程仍卡在 open，随短命引导进程退出收尸。P/Invoke 解析失败（静态
     // 件理论不可达 PAL、或符号缺失）一律 InvalidFd——fail closed。
-    internal static IntPtr OpenWithDeadline(string path)
+    internal static IntPtr OpenWithDeadline(string path) => OpenWithDeadline(path, EnvOpenFlags);
+
+    internal static IntPtr OpenWithDeadline(string path, int flags) =>
+        OpenWithDeadline(path, flags, 0);
+
+    // CREAT 路须带 0666 建件模（内核再按 umask 剥——sh `9>>` 同口径）；
+    // mode=0 会建出权限位 000 的件，调用方读不回自己的日志。
+    internal static IntPtr OpenWithDeadline(string path, int flags, int mode)
     {
         var fd = InvalidFd;
         // gate 不 using：超时被弃的线程若在 gate 释放后解除阻塞，
@@ -1240,7 +1569,7 @@ internal static class NativeMethods
         {
             try
             {
-                fd = SysOpen(path, EnvOpenFlags, 0);
+                fd = SysOpen(path, flags, mode);
             }
             catch (Exception)
             {
@@ -1298,26 +1627,53 @@ internal static class NativeMethods
     internal static bool IsRegularMode(FileStatus status) =>
         (status.Mode & TypeMask) == RegularFile;
 
-    // st_uid 复核：期望 uid=已解析调用 uid，缺席按本进程 euid——
-    // geteuid 拿不到（不该发生）按校验失败拒。
-    internal static bool OwnerMatches(FileStatus status, long? callerUid)
+    internal static bool IsDirMode(FileStatus status) =>
+        (status.Mode & TypeMask) == 0x4000; // S_IFDIR
+
+    // --log 件缺席时父目录的"调用者可写"判据：必须是目录（普通件 o+wx
+    // 也会命中下判——出货 PAL 无可用 O_DIRECTORY 旗标，目录判据在此
+    // 由 S_ISDIR 闭环）；
+    // 属主==调用 uid 直接放行（调用者自己的目录），否则认 others 写+
+    // 执行位（/tmp sticky 类公共可写区，sticky 位不归 mode 低 12 位管
+    // 不到——o+wx 两位置位才放行）。
+    // 组可写不放行（调用者 gid 未知面在 RootGroupWriteAllowed 之上不再扩）。
+    internal static bool DirWritableByCaller(FileStatus status, long? callerUid)
     {
-        long expected;
+        if (!IsDirMode(status))
+        {
+            return false;
+        }
+        if (CallerIsRoot(callerUid) || OwnerMatches(status, callerUid))
+        {
+            return true;
+        }
+        const int otherWriteExec = 0x0002 | 0x0001; // S_IWOTH|S_IXOTH
+        return (status.Mode & otherWriteExec) == otherWriteExec;
+    }
+
+    // 有效调用 uid：显式解析值（PKEXEC_UID/SUDO_UID）优先，缺席按本进程
+    // euid；geteuid 拿不到按 -1——校验侧一律拒（fail closed）。
+    internal static long EffectiveCallerUid(long? callerUid)
+    {
         if (callerUid is { } uid)
         {
-            expected = uid;
+            return uid;
         }
-        else
+        try
         {
-            try
-            {
-                expected = SysGetEUid();
-            }
-            catch (Exception)
-            {
-                return false;
-            }
+            return SysGetEUid();
         }
-        return status.Uid == expected;
+        catch (Exception)
+        {
+            return -1;
+        }
     }
+
+    // 调用者即 root：euid==0 语境（pkexec/sudo 缺席=直跑，或显式传 0）——
+    // DAC 覆盖下目录/文件本就全域可写，属主/o+wx 刚性复核只会误拒。
+    internal static bool CallerIsRoot(long? callerUid) => EffectiveCallerUid(callerUid) == 0;
+
+    // st_uid 复核：期望 uid=有效调用 uid（显式值或 euid）。
+    internal static bool OwnerMatches(FileStatus status, long? callerUid)
+        => status.Uid == EffectiveCallerUid(callerUid);
 }

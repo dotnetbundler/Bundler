@@ -9,7 +9,7 @@ public sealed record BundleSigningRequest(
     string Path,
     BundleSigningArtifactKind ArtifactKind,
     string ProductName,
-    string TargetTarget);
+    string Target);
 
 public enum BundleSigningArtifactKind
 {

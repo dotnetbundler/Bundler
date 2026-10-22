@@ -11,6 +11,8 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
     // 连续两次 graceful 失败后递进 -force（卷被 Finder/diskarbitration 占持时的标准处置）
     private const int DetachForceAttempt = 3;
     private static readonly int[] DetachBackoffMilliseconds = { 250, 500, 1000, 2000 };
+    private const int AttachTransientMaxAttempts = 4;
+    private const int AttachTransientBackoffMilliseconds = 1000;
     private const int ConvertTransientMaxAttempts = 9;
     // 连续 EAGAIN 到本次数说明 diskimages-helper 簿记大概率已卡死——先踢掉再睡再试
     private const int ConvertUnwedgeAttempt = 3;
@@ -150,8 +152,26 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
             }
             attachArgs.Add("-mountpoint");
             attachArgs.Add(mountDirectory);
-            await ToolRunner.RunAsync(
-                "hdiutil", attachArgs, workDirectory, cancellationToken);
+            // attach 与 convert 共用 diskimages-helper——同一 EAGAIN 瞬态面，
+            // 有限重试同例（失败时挂载未成立，无需先 detach 再试）。
+            for (var attachAttempt = 1; ; attachAttempt++)
+            {
+                try
+                {
+                    await ToolRunner.RunAsync(
+                        "hdiutil", attachArgs, workDirectory, cancellationToken);
+                    break;
+                }
+                catch (InvalidOperationException e)
+                    when (attachAttempt < AttachTransientMaxAttempts
+                          && e.Message.IndexOf("Resource temporarily unavailable", StringComparison.Ordinal) >= 0)
+                {
+                    logger.Log(
+                        BundleLogLevel.Warning,
+                        $"hdiutil attach transient failure (attempt {attachAttempt}/{AttachTransientMaxAttempts}); retrying.");
+                    await Task.Delay(AttachTransientBackoffMilliseconds * attachAttempt, cancellationToken);
+                }
+            }
             mounted = true;
             // 挂载事实落 Information 日志（MSBuild 侧映射 High，正常发布输出可见）——
             // 挂载点+镜像路径入消息便于关联后续 branding/detach 失败域。
@@ -287,18 +307,14 @@ internal sealed class MacDmgBundleBackend(MacDmgBundleConfiguration settings) : 
                     // best-effort cleanup; do not mask the real failure
                 }
             }
-            if (File.Exists(outputPath))
-            {
-                File.Delete(outputPath);
-            }
+            // 失败路清理尽力而为——删除自身失败不得遮蔽真正的构建失败。
+            FileTree.TryDeleteFile(outputPath);
+            FileTree.TryDeleteFile(outputPath + ".sha256");
             throw;
         }
         finally
         {
-            if (File.Exists(readWriteImage))
-            {
-                File.Delete(readWriteImage);
-            }
+            FileTree.TryDeleteFile(readWriteImage);
         }
     }
 

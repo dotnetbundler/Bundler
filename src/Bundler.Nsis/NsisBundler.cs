@@ -25,6 +25,12 @@ public sealed class NsisBundler : IFormatBundler
         {
             throw new ArgumentNullException(nameof(bundle));
         }
+        // null 目标元素先行拒绝——SelectMany(target => target.Formats) 直接
+        // NRE，与 BundleConfigurationValidator 聚合错误的契约不一致。
+        if (bundle.Targets.Any(target => target is null))
+        {
+            throw new ArgumentException("Targets must not contain null elements.", nameof(bundle));
+        }
         if (!SemanticVersion.TryParse(bundle.Version, out var semanticVersion))
         {
             throw new ArgumentException(

@@ -286,28 +286,6 @@ internal static class ToolRunner
         }
     }
 
-    /// <summary>Windows command-line quoting: backslashes before a quote (and trailing) double.</summary>
-    internal static string QuoteArgument(string argument)
-    {
-        var result = new StringBuilder("\"");
-        var slashes = 0;
-        foreach (var character in argument)
-        {
-            if (character == '\\')
-            {
-                slashes++;
-            }
-            else if (character == '"')
-            {
-                result.Append('\\', slashes * 2 + 1).Append('"');
-                slashes = 0;
-            }
-            else
-            {
-                result.Append('\\', slashes).Append(character);
-                slashes = 0;
-            }
-        }
-        return result.Append('\\', slashes * 2).Append('"').ToString();
-    }
+    /// <summary>Windows command-line quoting — the single implementation is <see cref="ToolProcess.QuoteWin"/>.</summary>
+    internal static string QuoteArgument(string argument) => ToolProcess.QuoteWin(argument);
 }

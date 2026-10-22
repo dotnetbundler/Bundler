@@ -78,11 +78,12 @@ dotnet msbuild samples/HelloBundlerApp/HelloBundlerApp.csproj -t:BundlerBundle -
 - `HelloBundlerMacApp*`：图标三模式（png/car/icon）、InfoPlist 合并双模式（file/xml）、PackageName、MinimumSystemVersion、签名/硬化运行时/entitlements、公证 12 旋钮。
 - `HelloBundlerDmg*`：压缩/卷名、Finder 布局 9 项、背景图/卷图标、EULA（`none` 关闭）、DMG 签名。
 - `HelloBundlerPkg*`：identifier/version/install-location、title/welcome/conclusion/license、安装域名、脚本目录、签名/公证 12 旋钮。
-- `HelloBundlerDeb*`：包名/版本/revision/epoch/架构/维护者/install-root/bin-link、关系字段 5 项、Section/Priority/Categories、DesktopFile/MetainfoFile/ChangelogFile、维护者脚本 4+systemd+conffiles、Compression。
-- `HelloBundlerRpm*`：包名/版本/release/epoch/架构/vendor/install-root/bin-link、关系字段 6 项、License/Group/Url/Categories、DesktopFile/MetainfoFile/ChangelogFile、ConfigLocations/SystemdServiceFile、安装脚本 File×4+Program×4、Compression、GPG 签名。
+- `HelloBundlerDeb*`：包名/版本/revision/epoch/架构/维护者/install-root/bin-link、关系字段 5 项、Section/Priority/Categories、DesktopFile/MetainfoFile/ChangelogFile、维护者脚本 4+systemd+conffiles。
+- `HelloBundlerRpm*`：包名/版本/release/epoch/架构/vendor/install-root/bin-link、关系字段 6 项、License/Group/Url/Categories、DesktopFile/MetainfoFile/ChangelogFile、ConfigLocations/SystemdServiceFile、安装脚本 File×4+Program×4、GPG 签名。
 - `HelloBundlerAppImage*`：包名/版本/架构/install-root/bin-link/icon/desktop/categories/metainfo、`HelloBundlerAppImageFiles=1` 任意载荷、GPG 签名。
 - `HelloBundlerApk*`：包名/版本/release/架构/origin/description/url/license/builddate、depends/provides/triggers/bin-link、六段安装脚本、RSA 签名。
 - `HelloBundlerArchive*`：归档名/版本覆盖。
+- `HelloBundlerUpdate*`：Enabled、FeedUrl、Channel、SigningKeyFile、BootstrapperDirectory、PublicKey、Notes。
 - `HelloBundler*`（无格式段）：Version、OutputPath、MainExecutable、UniversalTargets、Signing*（Windows 签名共享 7 旋钮）。
 
 ## 演示的能力

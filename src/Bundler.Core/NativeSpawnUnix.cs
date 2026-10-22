@@ -41,6 +41,7 @@ internal static class NativeSpawnUnix
     [DllImport(LibC, SetLastError = true)] private static extern int pipe([Out] int[] fds);
     [DllImport(LibC, SetLastError = true)] private static extern int fcntl(int fd, int cmd, int arg);
     [DllImport(LibC, SetLastError = true)] private static extern int close(int fd);
+    [DllImport(LibC, SetLastError = true)] private static extern int dup(int fd);
     [DllImport(LibC, SetLastError = true)] private static extern int access(byte[] path, int mode);
     [DllImport(LibC, SetLastError = true)] private static extern int kill(int pid, int sig);
     [DllImport(LibC, SetLastError = true)] private static extern int waitpid(int pid, out int status, int options);
@@ -83,7 +84,12 @@ internal static class NativeSpawnUnix
     private const int ECHILD = 10;
     private const int WNOHANG = 1;
     // POSIX_SPAWN_SETPGROUP|SETSIGDEF|SETSIGMASK——glibc/musl/libSystem 低位同值。
-    private const short SpawnFlags = 0x02 | 0x04 | 0x08;
+    // Darwin 追加 Apple 扩展 POSIX_SPAWN_CLOEXEC_DEFAULT(0x4000)：子件 exec 前
+    // 关闭一切非 file-actions 建立的 fd——F_SETFD 在 ARM64 变参 ABI 下 arg 递
+    // 不到致 FD_CLOEXEC 随机失位的残余窗由此兜底收口；glibc/musl 无该旗标
+    //（未知旗标位会 EINVAL）不加。
+    private static readonly short SpawnFlags =
+        (short)((s_darwin ? 0x4000 : 0) | 0x02 | 0x04 | 0x08);
 
     /// <summary>spawn 出的 Unix 子件句柄面：pid + 排水 fd + 退出账本。</summary>
     internal sealed class SpawnedChild
@@ -141,8 +147,15 @@ internal static class NativeSpawnUnix
             }
             foreach (var child in pending)
             {
+                // 阻塞等待方（WaitForExit() 无参）持着该子件 ReapLock 时本趟
+                // 跳过——lock 排队会把轮询线程钉死在这一个 pid 上，其余全部
+                // 子件的收尸与 Exited 派发随之停摆（饿死在前的实测病理）。
+                if (!Monitor.TryEnter(child.ReapLock))
+                {
+                    continue;
+                }
                 Action? onReaped = null;
-                lock (child.ReapLock)
+                try
                 {
                     if (!child.Reaped && TryReap(child.Pid, out var code))
                     {
@@ -150,6 +163,10 @@ internal static class NativeSpawnUnix
                         child.ExitCode = code;
                         onReaped = child.OnReaped;
                     }
+                }
+                finally
+                {
+                    Monitor.Exit(child.ReapLock);
                 }
                 try { onReaped?.Invoke(); }
                 catch { /* 订阅者异常不外溢收尸链 */ }
@@ -239,13 +256,24 @@ internal static class NativeSpawnUnix
                 throw PipeFailure();
             }
 
+            // 子件端落进 0/1/2 标准槽带（父件 std 描述符关闭语境）必须整体
+            // 搬离：占自家目标槽会跳过 dup2 动作→fd 带 CLOEXEC 进 exec 即被
+            // 收；占别家目标槽会被前序 dup2 覆写——两者都是子件标准管无声死
+            //（0 空 stdin、1/2 数据丢入虚空）。dup2(fd,fd) 清 CLOEXEC 与
+            // F_DUPFD_CLOEXEC 都有跨 libc/ABI 的语义或调用面缺口——dup()
+            // 链占槽搬高是跨三家 libc 与 ARM64 变参 ABI 的确定形。
+            RelocateStdSlotFd(stdinPipe, 0);
+            RelocateStdSlotFd(stdoutPipe, 1);
+            RelocateStdSlotFd(stderrPipe, 1);
+
             var spawn = SpawnOnWorkerThread(exeBytes, cwdBytes, argv, envp,
                 stdinPipe[0], stdoutPipe[1], stderrPipe[1],
                 stdinPipe[1], stdoutPipe[0], stderrPipe[0]);
             callInFlight = spawn.TimedOut; // 仅在超腿时调用可能还在栈内
 
-            // 父件：无论成败先关子件端。
-            CloseIf(stdinPipe[0]); CloseIf(stdoutPipe[1]); CloseIf(stderrPipe[1]);
+            // 父件：无论成败先关子件端（槽位置 -1，其后 CloseAll 不会双关
+            // 误伤并发 open 复用同号的无关 fd）。
+            CloseIf(stdinPipe, 0); CloseIf(stdoutPipe, 1); CloseIf(stderrPipe, 1);
             if (spawn.Failure is not null)
             {
                 CloseAll(stdinPipe); CloseAll(stdoutPipe); CloseAll(stderrPipe);
@@ -309,6 +337,13 @@ internal static class NativeSpawnUnix
             // 孤件清扫按 /proc/self/task/<tid>/children 精确圈定（fork 源线程即
             // 是 posix_spawn 内部 clone 的发起者）。macOS 无 /proc——按弃件处理。
             result.WorkerTid = LinuxSelfTid();
+            // opaque 缓冲尺寸锚定（三家 libc 实测 sizeof 上界 + 冗余）：
+            //   file_actions —— glibc 80B / musl ~100B / libSystem 不透明指针
+            //     小结构，256B ≥ 2.5× 余量；
+            //   attr —— glibc ~348B（内嵌双 sigset_t+sched_param+pad）为三家
+            //     最大，512B 余量 ~47%；
+            //   sigset —— glibc/musl 128B，Darwin sigset_t 仅 4B，128B 全覆盖。
+            // 分配后 FillZero：init 只按本机 struct 填有效区，余量区恒零不漂。
             var actions = Marshal.AllocHGlobal(256);
             var attr = Marshal.AllocHGlobal(512);
             var sigEmpty = Marshal.AllocHGlobal(128);
@@ -453,6 +488,30 @@ internal static class NativeSpawnUnix
         {
             if ((rc = posix_spawn_file_actions_adddup2(actions, stderrW, 2)) != 0) { return rc; }
             if ((rc = posix_spawn_file_actions_addclose(actions, stderrW)) != 0) { return rc; }
+        }
+        // Darwin CLOEXEC_DEFAULT 兜底把一切未被 file_actions 触及的 fd 关尽——
+        // 未重定向的标准流必须显式 adddup2(n,n) 钉名才得保留（dup2(n,n) 语义
+        // no-op，仅作"该槽已接管"登记），否则子件静默失去 stdio：CI 实证
+        // 无 --log 的 updater 腿 stderr 被收、写日志即死于非受控异常。
+        // 钉闸 = 槽无 dup2 动作（childEnd<0 或恰在目标槽）且非重定向管端
+        // 源槽：源槽被既有 addclose 收掉，补钉 dup2(n,n) 会撞 close→dup2
+        // EBADF；父件端管端占槽的形 pin→close 净关（父端本不该进子件）。
+        // child-end 恰在目标槽的形实质防线是 RelocateStdSlotFd（pipe 端恒
+        // 带 CLOEXEC，dup2(n,n) 挡得住 CLOEXEC_DEFAULT 清扫却清不掉
+        // CLOEXEC 位、execve 照收——钉名只兜非 CLOEXEC fd 的误收面）。
+        // 父件该槽本闭时 StdFdOpen 判闭跳过。dup() 探测非变参跨 ABI。
+        if (s_darwin)
+        {
+            bool RedirectSource(int n) =>
+                n == stdinR && stdinR != 0 ||
+                n == stdoutW && stdoutW != 1 ||
+                n == stderrW && stderrW != 2;
+            if ((stdinR < 0 || stdinR == 0) && !RedirectSource(0) && StdFdOpen(0) &&
+                (rc = posix_spawn_file_actions_adddup2(actions, 0, 0)) != 0) { return rc; }
+            if ((stdoutW < 0 || stdoutW == 1) && !RedirectSource(1) && StdFdOpen(1) &&
+                (rc = posix_spawn_file_actions_adddup2(actions, 1, 1)) != 0) { return rc; }
+            if ((stderrW < 0 || stderrW == 2) && !RedirectSource(2) && StdFdOpen(2) &&
+                (rc = posix_spawn_file_actions_adddup2(actions, 2, 2)) != 0) { return rc; }
         }
         // 父件端 addclose：fd 值落在 0-2 且该槽恰是前序 dup2 目标时跳过——
         // 父件 std 全关场景管道端可占入 0/1/2，此时该数字指向刚装上的排水口
@@ -726,8 +785,80 @@ internal static class NativeSpawnUnix
 
     private static Win32Exception PipeFailure() => new(Marshal.GetLastWin32Error(), "pipe/fcntl failed.");
 
-    private static void CloseIf(int fd)
+    // 子件端管端落进 0/1/2 标准槽带（父件 std 描述符被关语境）时整体搬离：
+    // 占自家 dup2 目标槽会跳过 dup2 动作→fd 带 CLOEXEC 进 exec 即被收；占
+    // 别家目标槽会被前序 dup2 提前覆写——两者都是子件标准管无声死。
+    // 搬离用 dup() 链占槽——dup 恒返最低空槽、非变参：带内空槽逐个占住
+    //（带内一共 3 位、fd 本体已占 1，至多 2 次中转）直到拿到 ≥3 复刻；
+    // 空槽探测/dup2 目标选择全程不需要 fcntl 带参调用（F_DUPFD_CLOEXEC 与
+    // F_GETFD 探测在 Apple ARM64 变参 ABI 下 arg 递不到——CI 实证；dup2
+    // 预取槽位的探测→占用微窗也一并消失）。带内副本即关；搬出后的 fd
+    // 不带 CLOEXEC——并发 spawn 微窗可继承（pipe()→SetCloexec 同款既有
+    // 残余口径，子件端 addclose 动作终归零）。
+    private static void RelocateStdSlotFd(int[] fds, int index)
     {
+        var fd = fds[index];
+        if (fd < 0 || fd > 2)
+        {
+            return;
+        }
+        var held0 = -1;
+        var held1 = -1;
+        var moved = dup(fd);
+        if (moved >= 0 && moved <= 2)
+        {
+            held0 = moved;
+            moved = dup(fd);
+        }
+        if (moved >= 0 && moved <= 2)
+        {
+            held1 = moved;
+            moved = dup(fd);
+        }
+        if (held0 >= 0)
+        {
+            _ = close(held0);
+        }
+        if (held1 >= 0)
+        {
+            _ = close(held1);
+        }
+        if (moved < 0)
+        {
+            throw PipeFailure();
+        }
+        fds[index] = moved;
+        _ = close(fd);
+    }
+
+    // 标准槽开闭探测：dup(fd) 对闭槽 EBADF、对开槽返复刻（非变参，跨 ABI
+    // 确定）——替代 fcntl(F_GETFD)：后者在 Apple ARM64 变参 ABI 下 arg 递
+    // 不到且 CI 实证返回值不可信。
+    private static bool StdFdOpen(int fd)
+    {
+        for (;;)
+        {
+            var probe = dup(fd);
+            if (probe >= 0)
+            {
+                _ = close(probe);
+                return true;
+            }
+            // EINTR 重试；EBADF 判闭；EMFILE 等其余失败按闭槽降级——
+            // 探测本身不可用时不阻断 spawn（登记残余）。
+            if (Marshal.GetLastWin32Error() != 4 /* EINTR */)
+            {
+                return false;
+            }
+        }
+    }
+
+    // 槽位关闭一并置 -1：两关之间 fd 号可被并发 open 复用——关后不置 -1，
+    // 后续 CloseAll 会把同一个号当"自己的 fd"再关一次，误杀无关描述符。
+    private static void CloseIf(int[] fds, int index)
+    {
+        var fd = fds[index];
+        fds[index] = -1;
         if (fd >= 0)
         {
             _ = close(fd);
@@ -736,8 +867,8 @@ internal static class NativeSpawnUnix
 
     private static void CloseAll(int[] fds)
     {
-        CloseIf(fds[0]);
-        CloseIf(fds[1]);
+        CloseIf(fds, 0);
+        CloseIf(fds, 1);
     }
 
     private static byte[] Utf8(string s) => Encoding.UTF8.GetBytes(s + '\0');

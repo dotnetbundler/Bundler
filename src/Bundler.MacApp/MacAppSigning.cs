@@ -18,7 +18,7 @@ internal static class MacAppSigning
 
     /// <summary>Apple 嵌套 bundle 形态：按 bundle 维度签名而不是按散文件签。</summary>
     private static readonly string[] NestedBundleExtensions =
-        [".app", ".appex", ".bundle", ".framework", ".xpc"];
+        [".app", ".appex", ".bundle", ".framework", ".xpc", ".qlgenerator", ".plugin", ".safariextension"];
 
     internal static bool Configured(MacAppSigningConfiguration signing) =>
         signing.Identity is not null || !string.IsNullOrEmpty(signing.TemporaryCertificateFile);
@@ -40,7 +40,13 @@ internal static class MacAppSigning
             signing.AppleId, signing.ApplePassword, signing.AppleTeamId,
             signing.SkipStapling, signing.NotaryWait,
             "Notarization requires a real signing identity; ad-hoc signatures cannot be notarized.");
-        if (signingRequested && !RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        // 公证服务拒收未开 hardened runtime 的代码签名——上传必败，前置拦在预检。
+        if (signing.Notarize && !signing.HardenedRuntime)
+        {
+            throw new ArgumentException(
+                "Notarization requires Signing.HardenedRuntime — Apple's notary service rejects signatures without it.");
+        }
+        if (signingRequested && !(MacAppBundleBackend.HostCheck?.Invoke() ?? RuntimeInformation.IsOSPlatform(OSPlatform.OSX)))
         {
             throw new PlatformNotSupportedException(".app signing requires a macOS host (codesign).");
         }

@@ -83,6 +83,11 @@ public sealed class TargetMatrixTests
             BundleTarget.Parse("windows-armv7hf"), PackageFormat.Nsis));
         Assert.True(TargetMatrix.Supports(
             BundleTarget.Parse("windows-aarch64"), PackageFormat.Nsis));
+        // AppImage i686：矩阵曾靠词表放行、后端再拒——现在词表不产词，规划期即剪
+        Assert.False(TargetMatrix.Supports(
+            BundleTarget.Parse("linux-i686"), PackageFormat.AppImage));
+        Assert.True(TargetMatrix.Supports(
+            BundleTarget.Parse("linux-x86_64"), PackageFormat.AppImage));
     }
 
     [Fact]

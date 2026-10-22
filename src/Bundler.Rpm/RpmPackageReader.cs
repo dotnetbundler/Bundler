@@ -14,6 +14,7 @@ internal sealed class RpmPackageReader
         public Dictionary<int, object> Tags { get; } = [];
         public int Tag(int tag) => Tags.TryGetValue(tag, out var v) && v is int[] i && i.Length > 0 ? i[0] : 0;
         public int[] Ints(int tag) => Tags.TryGetValue(tag, out var v) && v is int[] i ? i : [];
+        public long[] Longs(int tag) => Tags.TryGetValue(tag, out var v) && v is long[] l ? l : [];
         public string Text(int tag) => Tags.TryGetValue(tag, out var v) && v is string[] s && s.Length > 0 ? s[0] : "";
         public string[] Strings(int tag) => Tags.TryGetValue(tag, out var v) && v is string[] s ? s : [];
     }
@@ -52,7 +53,7 @@ internal sealed class RpmPackageReader
         return reader;
     }
 
-    private static Dictionary<int, object> ParseHeader(byte[] bytes, ref int offset, int regionTag)
+    internal static Dictionary<int, object> ParseHeader(byte[] bytes, ref int offset, int regionTag)
     {
         if (bytes[offset] != 0x8e || bytes[offset + 1] != 0xad ||
             bytes[offset + 2] != 0xe8 || bytes[offset + 3] != 0x01)
@@ -89,7 +90,7 @@ internal sealed class RpmPackageReader
         {
             3 => ReadInt16s(bytes, offset, count),
             4 => ReadInt32s(bytes, offset, count),
-            5 => new int[count],
+            5 => ReadInt64s(bytes, offset, count),
             6 => new[] { ReadString(bytes, offset) },
             7 => ReadBin(bytes, offset, count),
             8 or 9 => ReadStrings(bytes, offset, count),
@@ -113,6 +114,17 @@ internal sealed class RpmPackageReader
         for (var i = 0; i < count; i++)
         {
             result[i] = Read32(bytes, offset + i * 4);
+        }
+        return result;
+    }
+
+    private static long[] ReadInt64s(byte[] bytes, int offset, int count)
+    {
+        var result = new long[count];
+        for (var i = 0; i < count; i++)
+        {
+            result[i] = ((long)Read32(bytes, offset + i * 8) << 32) |
+                (uint)Read32(bytes, offset + i * 8 + 4);
         }
         return result;
     }

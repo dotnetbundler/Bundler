@@ -18,7 +18,6 @@ public sealed class ArtifactNamingTests
     [InlineData("macos-aarch64", PackageFormat.Dmg, "arm64")]
     [InlineData("macos-aarch64", PackageFormat.Pkg, "arm64")]
     [InlineData("linux-x86_64", PackageFormat.AppImage, "x86_64")]
-    [InlineData("linux-i686", PackageFormat.AppImage, "i686")]
     [InlineData("linux-aarch64", PackageFormat.AppImage, "aarch64")]
     [InlineData("linux-x86_64", PackageFormat.Deb, "amd64")]
     [InlineData("linux-i686", PackageFormat.Deb, "i386")]
@@ -64,6 +63,8 @@ public sealed class ArtifactNamingTests
     [InlineData("linux-x86_64", PackageFormat.AlpineApk, "x86_64")]
     [InlineData("linux-musl-x86_64", PackageFormat.Nsis, "x64")]
     // 真正不支持的架构才返回 null
+    // AppImage i686 无随包 runtime——后端与矩阵同拒绝，词表不再产词
+    [InlineData("linux-i686", PackageFormat.AppImage, null)]
     [InlineData("linux-armv7sf", PackageFormat.Rpm, null)]
     [InlineData("linux-armv7sf", PackageFormat.Deb, "armel")]
     [InlineData("windows-armv7hf", PackageFormat.Nsis, null)]

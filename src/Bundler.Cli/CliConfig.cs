@@ -948,7 +948,9 @@ internal static class CliConfig
         }
         if (document["identifier"] is null && infer)
         {
-            var product = document["productName"]?.GetValue<string>() ?? "app";
+            // 非标量 productName 留给反序列化统一归 rc=2——这里直取
+            // GetValue<string> 会抛 InvalidOperationException 绕开 rc=2 映射。
+            var product = Text(document, "productName") ?? "app";
             document["identifier"] = BundleDefaults.IdentifierPrefix +
                 BundleDefaults.NormalizeIdentifierSegment(product);
             inferred.Add($"identifier={document["identifier"]} (synthesized; pass --identifier for release)");
@@ -964,7 +966,7 @@ internal static class CliConfig
         }
 
         // 显式 null 视为未写：剥掉后让 defaults 基线生效——与原手写物化语义一致
-        // （"icons": null 曾等于 []，"outputDirectory": null 曾等于 "bundler-out"）。
+        // （"icons": null 曾等于 []，"outputDirectory": null 曾等于 "artifacts"）。
         foreach (var key in document.Where(pair => pair.Value is null).Select(pair => pair.Key).ToArray())
         {
             document.Remove(key);
@@ -980,7 +982,8 @@ internal static class CliConfig
                 DeserializeWithDefaults(
                     document,
                     TypeInfoFor<BundleConfiguration>(),
-                    new BundleConfiguration { OutputDirectory = "bundler-out" }),
+                    // 默认输出目录与 MSBuild BundlerOutputPath/文档全族同为 "artifacts"。
+                    new BundleConfiguration { OutputDirectory = "artifacts" }),
                 baseDirectory);
         }
         catch (JsonException e)

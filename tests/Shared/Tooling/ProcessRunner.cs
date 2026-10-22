@@ -15,6 +15,10 @@ internal static class ProcessRunner
     {
         public string? WorkingDirectory { get; set; }
         public TimeSpan Timeout { get; set; } = TimeSpan.FromMinutes(10);
+        // 空闲看门狗（默认关）：stdout/stderr 沉默超阈值即按挂死杀。与 Timeout
+        // 分工——Timeout 是总墙钟上限（活锁兜底），IdleTimeout 只问"多久没出声"：
+        // 零输出挂死的连接类僵死提前换枪，慢但有进展的进程一直输出就不被误杀。
+        public TimeSpan? IdleTimeout { get; set; }
         public string? StandardInput { get; set; }
         public Dictionary<string, string?>? Environment;
         // 进程 Start 成功后的 pid 观测钩子（诊断用）：回调异常不外溢破坏被测流程。
@@ -84,12 +88,15 @@ internal static class ProcessRunner
             catch { /* 诊断回调故障不得改变被测进程流程 */ }
             // 行级异步排空：孙代持管写端时 EOF 永不至——排水任务收尾走下方限窗，
             // 等不到按丢弃尾量处理（与原 BeginOutputReadLine+Cancel* 同价）。
+            // lastOutputAt 随每行刷新，供下方 IdleTimeout 看门狗判沉默。
+            var lastOutputAt = new[] { Environment.TickCount64 };
             var outTask = Task.Run(async () =>
             {
                 string? line;
                 while ((line = await process.StandardOutput.ReadLineAsync().ConfigureAwait(false)) is not null)
                 {
                     stdout.AppendLine(line);
+                    Interlocked.Exchange(ref lastOutputAt[0], Environment.TickCount64);
                 }
             });
             var errTask = Task.Run(async () =>
@@ -98,6 +105,7 @@ internal static class ProcessRunner
                 while ((line = await process.StandardError.ReadLineAsync().ConfigureAwait(false)) is not null)
                 {
                     stderr.AppendLine(line);
+                    Interlocked.Exchange(ref lastOutputAt[0], Environment.TickCount64);
                 }
             });
             if (options.StandardInput is not null)
@@ -105,12 +113,32 @@ internal static class ProcessRunner
                 process.StandardInput.Write(options.StandardInput);
             }
             process.StandardInput.Close();
-            if (!process.WaitForExit((int)options.Timeout.TotalMilliseconds))
+            // 等待循环：Timeout 是总墙钟上限；IdleTimeout 置位时 stdout/stderr
+            // 沉默超阈值同样判死——两路排水任务逐行刷新 lastOutputAt。
+            var deadlineAt = Environment.TickCount64 + (long)options.Timeout.TotalMilliseconds;
+            var idleMs = options.IdleTimeout is { } it ? (long)it.TotalMilliseconds : long.MaxValue;
+            while (true)
             {
-                TryKillTree(process);
-                throw new TimeoutException(
-                    $"Process timed out after {options.Timeout}: {filePath} {argumentLine ?? string.Join(' ', arguments ?? [])}\n" +
-                    $"stdout so far:\n{stdout}\nstderr so far:\n{stderr}");
+                var now = Environment.TickCount64;
+                var remainTotal = deadlineAt - now;
+                var remainIdle = idleMs == long.MaxValue
+                    ? long.MaxValue
+                    : idleMs - (now - Interlocked.Read(ref lastOutputAt[0]));
+                if (remainTotal <= 0 || remainIdle <= 0)
+                {
+                    TryKillTree(process);
+                    var cause = remainTotal <= 0
+                        ? $"timed out after {options.Timeout}"
+                        : $"produced no output for {options.IdleTimeout} (idle-timeout)";
+                    throw new TimeoutException(
+                        $"Process {cause}: {filePath} {argumentLine ?? string.Join(' ', arguments ?? [])}\n" +
+                        $"stdout so far:\n{stdout}\nstderr so far:\n{stderr}");
+                }
+                var sliceMs = (int)Math.Min(250, Math.Min(remainTotal, remainIdle));
+                if (process.WaitForExit(Math.Max(1, sliceMs)))
+                {
+                    break;
+                }
             }
             // EOF 排水限窗：孙代继承管道写端时退出不等于 EOF——10s 内读不完的
             // 丢尾量收尾（读任务被钉在管道上不可取消，弃任务不阻塞断言面）。
