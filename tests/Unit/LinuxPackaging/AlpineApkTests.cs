@@ -781,7 +781,7 @@ public sealed class AlpineApkTests : TempBase
             Assert.True(EndsWithZeroBlocks(segments[2]), "The data tar keeps its end-of-archive blocks.");
 
             var sig = ApkPackageReader.ReadTar(segments[0]);
-            Assert.True(sig.Count == 1 && sig[0].Name == ".SIGN.RSA.testkey.rsa.rsa.pub" &&
+            Assert.True(sig.Count == 1 && sig[0].Name == ".SIGN.RSA.testkey.rsa.pub" &&
                 sig[0].TypeFlag == '0' && sig[0].Mode == 420,
                 $"Signature member mismatch: {string.Join(',', sig.Select(e => e.Name))}");
             var control = ApkPackageReader.ReadTar(segments[1]);
@@ -820,7 +820,7 @@ public sealed class AlpineApkTests : TempBase
             var controlGzip = apk.Skip(members[1]).Take(members[2] - members[1]).ToArray();
             using var rsa = RSA.Create();
             rsa.ImportFromPem(EncryptedPublicKeyPem);
-            Assert.True(sig.Count == 1 && sig[0].Name == ".SIGN.RSA.enckey.rsa.rsa.pub" &&
+            Assert.True(sig.Count == 1 && sig[0].Name == ".SIGN.RSA.enckey.rsa.pub" &&
                 rsa.VerifyData(controlGzip, sig[0].Content,
                     HashAlgorithmName.SHA1, RSASignaturePadding.Pkcs1),
                 "The encrypted key must produce a verifiable signature.");
@@ -1142,5 +1142,24 @@ public sealed class AlpineApkTests : TempBase
         }
         return dir?.FullName
             ?? throw new InvalidOperationException("repo root not found above " + AppContext.BaseDirectory);
+    }
+
+    [Fact]
+    public void SignatureMemberName_StripsRsaSuffix()
+    {
+        Assert.Equal(".SIGN.RSA.mykey.rsa.pub",
+            ApkPackageWriter.SignatureMemberName("/keys/mykey.rsa"));
+        Assert.Equal(".SIGN.RSA.mykey.rsa.pub",
+            ApkPackageWriter.SignatureMemberName("/keys/mykey.rsa.pub"));
+        Assert.Equal(".SIGN.RSA.mykey.pem.rsa.pub",
+            ApkPackageWriter.SignatureMemberName("/keys/mykey.pem"));
+    }
+
+    [Fact]
+    public void SignatureMemberName_EmptyBaseName_Rejected()
+    {
+        // 私钥文件名恰为 .rsa/.rsa.pub 时基名为空——显式拒而非产 .SIGN.RSA..rsa.pub。
+        Assert.Throws<ArgumentException>(() => ApkPackageWriter.SignatureMemberName("/keys/.rsa"));
+        Assert.Throws<ArgumentException>(() => ApkPackageWriter.SignatureMemberName("/keys/.rsa.pub"));
     }
 }

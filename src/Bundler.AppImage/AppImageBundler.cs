@@ -35,7 +35,7 @@ public sealed class AppImageBundler : IFormatBundler
             throw new NotSupportedException(
                 $"DotNet.Bundler.AppImage accepts AppImage targets only; '{unsupported}' requires another backend package.");
         }
-        AppImageBundleBackend.ValidateConfiguration(_configuration);
+        AppImageBundleBackend.ValidateConfiguration(_configuration, bundle);
     }
 
     public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(

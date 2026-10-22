@@ -2,12 +2,11 @@ namespace DotNet.Bundler.Core;
 
 /// <summary>
 /// 目录符号链接的处理策略：<see cref="Traverse"/> 沿链递归（强制深度封顶防环）、
-/// <see cref="WarnSkip"/> 记警告跳过、<see cref="Reject"/> 显式拒绝。
+/// <see cref="Reject"/> 显式拒绝。
 /// </summary>
 internal enum TreeLinkPolicy
 {
     Traverse,
-    WarnSkip,
     Reject
 }
 
@@ -76,13 +75,6 @@ internal static class FileTree
         }
         foreach (var directory in directories)
         {
-            if (links == TreeLinkPolicy.WarnSkip &&
-                (File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
-            {
-                // 目录链接不展开：穿透会把目标树复制两遍，祖先链接会无界递归。
-                log.Log(BundleLogLevel.Warning, $"Skipping directory symlink: {directory}");
-                continue;
-            }
             CopyTree(
                 directory,
                 Path.Combine(destination, Path.GetFileName(directory)),

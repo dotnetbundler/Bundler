@@ -36,31 +36,19 @@ internal static class ApkPackageWriter
         AlpineApkBundleConfiguration settings,
         IBundleLogger logger)
     {
-        var packageName = settings.PackageName ?? ApkIdentity.SanitizeName(bundle.ProductName);
-        ApkIdentity.ValidateName(packageName);
-        var upstream = ApkIdentity.MapVersion(settings.Version ?? bundle.Version);
-        var release = settings.Release ?? "0";
-        ApkIdentity.ValidateNonNegativeInteger(release, "Release");
-        var pkgver = upstream + "-r" + release;
-        var architecture = settings.Architecture ?? ApkIdentity.MapArchitecture(item.Target);
-        ApkIdentity.ValidateArchitecture(architecture);
-        var origin = settings.Origin ?? packageName;
-        var description = settings.Description ?? bundle.Description ?? "";
-        if (description.Length == 0)
-        {
-            description = bundle.ProductName;
-        }
-        var url = settings.Url ?? bundle.Homepage ?? "";
-        var license = settings.License ?? "";
-        var buildDate = settings.BuildDate ?? "0";
-        ApkIdentity.ValidateNonNegativeInteger(buildDate, "BuildDate");
-        var installRoot = "usr/lib/" + packageName;
-        var binLink = settings.BinLink ?? packageName;
-        // 与 rpm/appimage 同规："none" 是关闭语义，不产字面 usr/bin/none 链接。
-        if (string.Equals(binLink, "none", StringComparison.OrdinalIgnoreCase))
-        {
-            binLink = "";
-        }
+        // 与门面 Validate 同一条校验链——直调 writer 也得到一致异常契约。
+        ApkValidation.Settings(settings, bundle);
+        var resolved = ApkValidation.Target(settings, bundle, item.Target);
+        var packageName = resolved.PackageName;
+        var pkgver = resolved.PkgVer;
+        var architecture = resolved.Architecture;
+        var installRoot = resolved.InstallRoot;
+        var binLink = resolved.BinLink;
+        var origin = resolved.Origin;
+        var description = resolved.Description;
+        var url = resolved.Url;
+        var license = resolved.License;
+        var buildDate = resolved.BuildDate;
 
         var payload = CollectPayload(bundle, item, installRoot, binLink, packageName, settings, logger);
 
@@ -97,17 +85,15 @@ internal static class ApkPackageWriter
 
         // Optional signature segment: a tar holding .SIGN.RSA.<key name>.rsa.pub
         // whose content is the raw PKCS1v15 RSA-SHA1 signature over the control
-        // gzip stream. It precedes the control segment.
+        // gzip stream. It precedes the control segment. The member name must
+        // match the trusted public key file in /etc/apk/keys/<name>.rsa.pub —
+        // strip the private key's own ".rsa"/".rsa.pub" suffix first or apk
+        // looks up a key that never exists.
         byte[]? signatureGzip = null;
         if (settings.Signing.KeyFile is { Length: > 0 } keyFile)
         {
-            if (!File.Exists(keyFile))
-            {
-                throw new FileNotFoundException(
-                    $"The .apk signing key does not exist: {keyFile}", keyFile);
-            }
             var signature = ApkSigner.Sign(controlGzip, keyFile, settings.Signing.Passphrase);
-            var memberName = ".SIGN.RSA." + Path.GetFileName(keyFile) + ".rsa.pub";
+            var memberName = SignatureMemberName(keyFile);
             signatureGzip = Gzip.Compress(TarData(
             [
                 new TarEntry
@@ -187,12 +173,6 @@ internal static class ApkPackageWriter
         }
     }
 
-    private static readonly string[] BuiltInFields =
-    [
-        "pkgname", "pkgver", "pkgdesc", "url", "arch", "origin", "license",
-        "depend", "provides", "triggers", "builddate", "size", "datahash"
-    ];
-
     private static string PackageInfo(
         string packageName,
         string pkgver,
@@ -231,25 +211,14 @@ internal static class ApkPackageWriter
         }
         foreach (var depend in settings.Depends ?? [])
         {
-            ApkIdentity.ValidateListEntry(depend, nameof(settings.Depends));
             Field("depend", depend);
         }
         foreach (var provide in settings.Provides ?? [])
         {
-            ApkIdentity.ValidateListEntry(provide, nameof(settings.Provides));
             Field("provides", provide);
         }
         if (settings.Triggers is { Count: > 0 } triggers)
         {
-            foreach (var trigger in triggers)
-            {
-                if (!trigger.StartsWith("/", StringComparison.Ordinal))
-                {
-                    throw new ArgumentException(
-                        $"Trigger directories must be absolute paths: '{trigger}'.");
-                }
-                ApkIdentity.ValidateListEntry(trigger, nameof(settings.Triggers));
-            }
             Field("triggers", string.Join(" ", triggers));
         }
         Field("builddate", buildDate);
@@ -259,61 +228,88 @@ internal static class ApkPackageWriter
         {
             foreach (var pair in settings.ExtraPkgInfo)
             {
-                if (!pair.Key.All(c => char.IsLetterOrDigit(c) || c is '.' or '_' or '-') ||
-                    pair.Key.Length == 0)
-                {
-                    throw new ArgumentException(
-                        $"Invalid .PKGINFO key: '{pair.Key}'.");
-                }
-                if (BuiltInFields.Contains(pair.Key, StringComparer.Ordinal))
-                {
-                    throw new ArgumentException(
-                        $"The .PKGINFO key '{pair.Key}' collides with a built-in field.");
-                }
                 Field(pair.Key, pair.Value);
             }
         }
         return builder.ToString();
     }
 
+    /// <summary>
+    /// The signature member name for a key file: <c>.SIGN.RSA.&lt;name&gt;.rsa.pub</c>
+    /// where <c>&lt;name&gt;</c> is the file's basename minus any
+    /// <c>.rsa</c>/<c>.rsa.pub</c> suffix — matching <c>/etc/apk/keys/&lt;name&gt;.rsa.pub</c>
+    /// lookup. A name that reduces to empty rejects. Shared with
+    /// <see cref="ApkValidation"/> so `bundler validate` surfaces the same error.
+    /// </summary>
+    internal static string SignatureMemberName(string keyFile)
+    {
+        var keyName = Path.GetFileName(keyFile);
+        if (keyName.EndsWith(".rsa.pub", StringComparison.Ordinal))
+        {
+            keyName = keyName.Substring(0, keyName.Length - ".rsa.pub".Length);
+        }
+        else if (keyName.EndsWith(".rsa", StringComparison.Ordinal))
+        {
+            keyName = keyName.Substring(0, keyName.Length - ".rsa".Length);
+        }
+        if (keyName.Length == 0)
+        {
+            throw new ArgumentException(
+                $"The .apk signing key file name '{Path.GetFileName(keyFile)}' has no usable " +
+                "base name — the signature member would be '.SIGN.RSA..rsa.pub'. " +
+                "Rename the key file to '<name>.rsa'.");
+        }
+        return ".SIGN.RSA." + keyName + ".rsa.pub";
+    }
+
+    /// <summary>The six apk control-script knobs and their dotted member names.</summary>
+    internal static (string? Path, string Name)[] ScriptKnobs(AlpineApkBundleConfiguration settings) =>
+    [
+        (settings.PreInstallFile, ".pre-install"),
+        (settings.PostInstallFile, ".post-install"),
+        (settings.PreUninstallFile, ".pre-deinstall"),
+        (settings.PostUninstallFile, ".post-deinstall"),
+        (settings.PreUpgradeFile, ".pre-upgrade"),
+        (settings.PostUpgradeFile, ".post-upgrade")
+    ];
+
     // apk install scripts live in the control segment as dotted names
-    // (.pre-install, ...). Like rpm scriptlets they must use LF line endings.
+    // (.pre-install, ...). Like rpm scriptlets they must use LF line endings —
+    // and no UTF-8 BOM, which busybox would read as garbage before the shebang.
+    internal static byte[] ReadScript(string path, string name)
+    {
+        var full = Path.GetFullPath(path);
+        if (!File.Exists(full))
+        {
+            throw new FileNotFoundException(
+                $"The .apk script '{name}' does not exist: {full}", full);
+        }
+        var bytes = File.ReadAllBytes(full);
+        var hasBom = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF;
+        if (bytes.Length == 0 || hasBom ||
+            Encoding.UTF8.GetString(bytes).Contains('\r'))
+        {
+            throw new ArgumentException(
+                $"The .apk script '{name}' must be non-empty UTF-8 with LF line " +
+                $"endings and no BOM: {full}");
+        }
+        return bytes;
+    }
+
     private static void EmitScripts(List<TarEntry> controlEntries, AlpineApkBundleConfiguration settings)
     {
-        (string? path, string name)[] scripts =
-        [
-            (settings.PreInstallFile, ".pre-install"),
-            (settings.PostInstallFile, ".post-install"),
-            (settings.PreUninstallFile, ".pre-deinstall"),
-            (settings.PostUninstallFile, ".post-deinstall"),
-            (settings.PreUpgradeFile, ".pre-upgrade"),
-            (settings.PostUpgradeFile, ".post-upgrade")
-        ];
-        foreach (var (path, name) in scripts)
+        foreach (var (path, name) in ScriptKnobs(settings))
         {
             if (path is null)
             {
                 continue;
-            }
-            var full = Path.GetFullPath(path);
-            if (!File.Exists(full))
-            {
-                throw new FileNotFoundException(
-                    $"The .apk script '{name}' does not exist: {full}", full);
-            }
-            var bytes = File.ReadAllBytes(full);
-            if (bytes.Length == 0 ||
-                Encoding.UTF8.GetString(bytes).Contains('\r'))
-            {
-                throw new ArgumentException(
-                    $"The .apk script '{name}' must be non-empty with LF line endings: {full}");
             }
             controlEntries.Add(new TarEntry
             {
                 Name = name,
                 Kind = TarEntryKind.File,
                 Mode = 493, // 0755
-                Content = bytes,
+                Content = ReadScript(path, name),
                 PaxRecords = TimestampRecords
             });
         }
@@ -329,42 +325,19 @@ internal static class ApkPackageWriter
         IBundleLogger logger)
     {
         var entries = new List<PayloadEntry>();
-        var claimed = new HashSet<string>(StringComparer.Ordinal);
-        var directories = new HashSet<string>(StringComparer.Ordinal);
-
-        void ClaimDirectory(string path)
-        {
-            var segments = path.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
-            for (var i = 1; i <= segments.Length; i++)
+        var book = new PayloadPathBook(
+            onNewDirectory: directory => entries.Add(new PayloadEntry
             {
-                var directory = string.Join("/", segments.Take(i));
-                if (claimed.Add(directory))
-                {
-                    directories.Add(directory);
-                    entries.Add(new PayloadEntry
-                    {
-                        ArchivePath = directory,
-                        Kind = TarEntryKind.Directory,
-                        Mode = 493 /* 0755 */
-                    });
-                }
-                // 前缀已被文件占位时静默跳过会产"父是文件、下有子项"的坏包——显式拒绝。
-                else if (!directories.Contains(directory))
-                {
-                    throw new InvalidOperationException(
-                        $"A payload file and a directory map to the same .apk path: '{directory}'.");
-                }
-            }
-        }
+                ArchivePath = directory,
+                Kind = TarEntryKind.Directory,
+                Mode = 493 /* 0755 */
+            }));
+
+        void ClaimDirectory(string? path) => book.ClaimDirectory(path);
 
         void AddFile(string archivePath, string sourcePath, int mode)
         {
-            if (!claimed.Add(archivePath))
-            {
-                throw new InvalidOperationException(
-                    $"Two payload entries target the same path: '{archivePath}'.");
-            }
-            ClaimDirectory(archivePath.Substring(0, archivePath.LastIndexOf('/')));
+            book.ClaimFile(archivePath);
             entries.Add(new PayloadEntry
             {
                 ArchivePath = archivePath,
@@ -375,14 +348,21 @@ internal static class ApkPackageWriter
             });
         }
 
+        void AddLink(string archivePath, string linkTarget)
+        {
+            book.ClaimFile(archivePath);
+            entries.Add(new PayloadEntry
+            {
+                ArchivePath = archivePath,
+                Kind = TarEntryKind.Symlink,
+                Mode = 511 /* 0777 */,
+                LinkTarget = linkTarget
+            });
+        }
+
         void AddGeneratedFile(string archivePath, byte[] content, int mode)
         {
-            if (!claimed.Add(archivePath))
-            {
-                throw new InvalidOperationException(
-                    $"Two payload entries target the same path: '{archivePath}'.");
-            }
-            ClaimDirectory(archivePath.Substring(0, archivePath.LastIndexOf('/')));
+            book.ClaimFile(archivePath);
             entries.Add(new PayloadEntry
             {
                 ArchivePath = archivePath,
@@ -401,6 +381,10 @@ internal static class ApkPackageWriter
             {
                 ClaimDirectory(sourceItem.ArchivePath);
             }
+            else if (sourceItem.Kind == PayloadSourceKind.Symlink)
+            {
+                AddLink(sourceItem.ArchivePath, sourceItem.LinkTarget!);
+            }
             else
             {
                 AddFile(sourceItem.ArchivePath, sourceItem.SourcePath!, sourceItem.Mode);
@@ -412,6 +396,10 @@ internal static class ApkPackageWriter
             if (sourceItem.Kind == PayloadSourceKind.Directory)
             {
                 ClaimDirectory(sourceItem.ArchivePath);
+            }
+            else if (sourceItem.Kind == PayloadSourceKind.Symlink)
+            {
+                AddLink(sourceItem.ArchivePath, sourceItem.LinkTarget!);
             }
             else
             {
@@ -438,42 +426,13 @@ internal static class ApkPackageWriter
         {
             var destination = FreedesktopFiles.NormalizeAbsoluteDestination(
                 file.Destination, "alpineapk");
-            var source = Path.GetFullPath(file.Source);
-            if (!File.Exists(source))
-            {
-                throw new FileNotFoundException(
-                    $"The .apk mapped file does not exist: {source}", source);
-            }
-            if (!UnixFileTypes.IsRegularFile(source))
-            {
-                throw new ArgumentException(
-                    $"The .apk mapped file must be a regular file: {source}");
-            }
-            AddFile(destination.TrimStart('/'), source, 420 /* 0644 */);
+            AddFile(destination.TrimStart('/'),
+                Path.GetFullPath(file.Source), 420 /* 0644 */);
         }
 
         if (binLink.Length > 0)
         {
-            var linkPath = "usr/bin/" + binLink;
-            if (binLink is "." or ".." ||
-                binLink.IndexOfAny(['/', '\\', ' ', '\t', '"', '\'', '$']) >= 0)
-            {
-                throw new ArgumentException(
-                    $"The bin-link name must be a plain file name: '{binLink}'.");
-            }
-            if (!claimed.Add(linkPath))
-            {
-                throw new InvalidOperationException(
-                    $"A payload file already occupies the bin-link path: '{linkPath}'.");
-            }
-            ClaimDirectory("usr/bin");
-            entries.Add(new PayloadEntry
-            {
-                ArchivePath = linkPath,
-                Kind = TarEntryKind.Symlink,
-                Mode = 511, /* 0777 */
-                LinkTarget = "../lib/" + packageName + "/" + mainExecutable
-            });
+            AddLink("usr/bin/" + binLink, "../lib/" + packageName + "/" + mainExecutable);
         }
 
         return entries;

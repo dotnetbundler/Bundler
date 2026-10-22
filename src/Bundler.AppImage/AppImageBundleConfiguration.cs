@@ -37,7 +37,7 @@ public sealed class AppImageBundleConfiguration
     /// <summary>
     /// Name of the symlink created at <c>usr/bin/&lt;name&gt;</c> inside the
     /// AppDir pointing at the main executable under <see cref="InstallRoot"/>.
-    /// Defaults to the package name; <c>none</c> disables the link.
+    /// Defaults to the package name; <c>""</c> or <c>none</c> disables the link.
     /// </summary>
     public string? BinLink { get; init; }
 

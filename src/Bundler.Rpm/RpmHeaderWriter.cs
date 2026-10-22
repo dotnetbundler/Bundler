@@ -55,6 +55,14 @@ internal static class RpmHeaderWriter
         Count = values.Length
     };
 
+    internal static Entry Int64s(int tag, params long[] values) => new()
+    {
+        Tag = tag,
+        Type = TypeInt64,
+        Data = Pack64(values),
+        Count = values.Length
+    };
+
     internal static Entry Strings(int tag, IReadOnlyList<string> values, int type = TypeStringArray)
     {
         var data = new List<byte>();
@@ -146,6 +154,20 @@ internal static class RpmHeaderWriter
         for (var i = 0; i < values.Count; i++)
         {
             Write16(bytes, i * 2, values[i]);
+        }
+        return bytes;
+    }
+
+    private static byte[] Pack64(IReadOnlyList<long> values)
+    {
+        var bytes = new byte[values.Count * 8];
+        for (var i = 0; i < values.Count; i++)
+        {
+            var value = values[i];
+            for (var b = 0; b < 8; b++)
+            {
+                bytes[i * 8 + b] = (byte)(value >> (56 - b * 8));
+            }
         }
         return bytes;
     }

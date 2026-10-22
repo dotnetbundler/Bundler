@@ -9,6 +9,8 @@
 - **内嵌固定版本 `appimagetool`**（x86_64+aarch64 二进制 + 两个 type2 runtime 共四件入 `third_party/appimagetool/` + SHA-256 provenance）随 `DotNet.Bundler.AppImage` 包分发；pinned 构建不内嵌 runtime，**始终经 `--runtime-file` 外供**（缺省会联网下载），不联网。
 - **不引入 linuxdeploy**（其职责是 gtk/gstreamer 等依赖拷贝编排，超产品边界）；契约：依赖须打进 publish 载荷。
 - **构建宿主限 Linux**（appimagetool 是 Linux ELF，与 deb/rpm 任意宿主可产不同）；可交叉——x86_64 宿主可产 aarch64 产物（嵌入 runtime-aarch64，实测 e_machine=0xb7）。
+  `linux-x86`/i686 目标与 `Architecture=i686` 覆盖均明确拒绝（无随包 runtime，不承诺）。
+- AppDir 载荷经共享 `PayloadSource` 枚举落盘：输入树内符号链接在 AppDir 内重建为相对链接（mksquashfs 原样保留），外指/悬空链接与资源目的地越界打包前拒绝——与 deb/rpm/apk 同一契约。
 - 一律以 `APPIMAGE_EXTRACT_AND_RUN=1` 调工具（容器/CI 常无 FUSE）。
 - 压缩**仅 zstd**：pinned appimagetool 的 mksquashfs 只编译进 zstd（gzip/xz 实测报不支持），不暴露压缩旋钮。
 - AppDir 结构：`usr/` 子树复用 `Bundler.Core` 共享 freedesktop 生成器（`.desktop`+hicolor+metainfo+`usr/lib/<pkg>/`+`usr/bin` 相对链接）；根级 `AppRun` 为**受控生成脚本** `exec "$APPDIR/usr/bin/<main>" "$@"`（可读可审，非预编译二进制）；根 `.desktop` 是指向 staged 件的符号链接，`Exec`/`Icon` 按 AppDir 约定修正。
@@ -29,7 +31,7 @@
 - 最小产物全链：AppDir 组装、命名、结构断言；`--appimage-extract` 解包 + 载荷真实运行。
 - 三容器（debian:stable/ubuntu:latest/fedora:latest）`--appimage-extract-and-run` 冒烟实测。
 - `BundlerAppImage*` 九旋钮 + `BundlerAppImageFile` 任意 AppDir 路径映射（拒绝对/`..`/空段/反斜杠/生成件碰撞）。
-- **本体 GPG 签名**（可选）：`BundlerAppImageSigningKeyFile`/`Passphrase` 供密钥才签，隔离 `GNUPGHOME` 导入 + `APPIMAGETOOL_SIGN_PASSPHRASE` 注入，`gpgv` 实测验签；无密钥产物不变。
+- **本体 GPG 签名**（可选）：`BundlerAppImageSigningKeyFile`/`Passphrase` 供密钥才签，私有临时根下的隔离 `GNUPGHOME`（0700）导入 + `APPIMAGETOOL_SIGN_PASSPHRASE` 环境变量注入（口令不进 argv），构建结束杀 agent 并删目录，`gpgv` 实测验签；无密钥产物不变。
 - musl 目标：`linux-musl-x86_64` alpine 容器真产真跑（extract-and-run 与 FUSE 挂载双路）；`linux-musl-aarch64` 产出实测（运行腿待仿真）。
 - `linux-aarch64`：`ubuntu-26.04-arm` 真机腿 `arm64-real-hw.sh --appimage` 直跑断言跑绿。
 - `appimagelint` 信息级接入（无 tag 豁免体系，非阻断）：有效项全过，✖ 项为载荷 glibc 地板与 `@2` 目录解析局限。

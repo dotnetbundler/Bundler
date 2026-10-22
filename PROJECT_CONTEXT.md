@@ -15,8 +15,8 @@
 > 引导件冻件口径：现嵌 8 件为 produce-bootstrap run `39030858362`@`e0174dc` 产出（PR #129 入库，含 #128 PAL 化——env 件校验与 `UnixFileTypes` 改走 `libSystem.Native`、gate 竞态修复），SHA-256 与字节数留账于该 squash 正文。
 > 外部工具挂死加固：PR #130 给 `ToolRunner`/`ToolCache` 全链有界等待+spawn 追踪（`BUNDLER_TOOL_TIMEOUT_SECONDS`/`BUNDLER_TOOL_TRACE`），挂死收敛为带现场的有界失败；macOS 偶发 `hdiutil` 簿记滞后断言面由 PR #131 改有界轮询；PR #132 加 CI 进程快照采样（随后过滤瘦身至测试/工具面白名单）——加固后 intel 腿 suite=all 八连压测零复现，OS 层凶手未捕获。
 > 图形提权入口链等剩余边界仍挂 `docs/project/special-acceptance.md`。
-> 当前包版本：`0.1.0-alpha.107`（根 `Directory.Build.props` 的 `BundlerPackageVersion`，本分支 `rework/entry-layer` 上）
-> 当前阶段：**全功能面体检收口进行中**——七域并行审查（Bugs/Security/Flags/Notes 四级全清零）产出约 95 项 findings，按用户授权分 6 个连贯 PR 处置：PR-1 Core+Abstractions 已合入（#142，4 轮 Local Review 清零）、**PR-2 入口层收口完成（#144 待统一合并，2 轮 Local Review 清零）**、PR-3 Linux、PR-4 Windows、PR-5 macOS、PR-6 UPDATE（含 produce-bootstrap 重冻）；
+> 当前包版本：`0.1.0-alpha.107`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）
+> 当前阶段：**全功能面体检收口进行中**——七域并行审查（Bugs/Security/Flags/Notes 四级全清零）产出约 95 项 findings，按用户授权分 6 个连贯 PR 处置：PR-1 Core+Abstractions 已合入（#142，4 轮 Local Review 清零）、PR-2 入口层收口完成（#144 待统一合并，2 轮 Local Review 清零）、PR-3 Linux 后端收口完成（#145 待统一合并，5 轮 Local Review 清零）、PR-4 Windows 后端收口完成（#146 待统一合并，6 轮 Local Review 清零）、PR-5 macOS 后端收口完成（#147 待统一合并，2 轮 Local Review 清零）、PR-6 UPDATE 收口完成（#148 待统一合并，9 轮 Local Review 清零，引导件冻件全 8 件重冻入库）——剩全矩阵 verify 统一 dispatch；
 > 全部 11 个格式、CLI 与 UPDATE 均已冻结（冻结指功能面不扩展，质量收口仍在进行）；目标模型已定型——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `{os}[-{libc}]-{arch}` canonical 词，契约与全产物名目录见 `docs/design/targets.md`
 > 实施证据以 git 提交与 PR 记录为准，各格式 `docs/design/formats/` 单文档只留设计决策、语义契约与能力状态
 >
@@ -167,10 +167,10 @@ Validator 集中剥 null 元素+`MainExecutable` 空白拒绝；`BundlePipeline`
 全部格式、CLI 与 UPDATE 均已冻结并入 `main`。
 **当前主线：全功能面体检收口（用户已授权"开始"）**——七域只读审查产出约 95 项 findings（Bugs ~22 / Security ~12 / Flags ~18 / Notes ~30 / 改进 ~25），按因果链分 6 个连贯 PR，各走 Local Review 闭环（`devin-reviewer` 子会话审 diff 自发评论、四类清零才合）：
 
-1. **PR-1 Core+Abstractions**（已随 PR #142 合入 `main@744cfb6`）：有界等待/FileTree 复用/validator 剥 null/桌面净化/命名与注入收口/秘密面/PathText 统一路径比较；收口证据＝本机 Release build+Unit+Api 全绿 + Local Review clean 后提交。
-2. **PR-2 入口层**：CLI 混合 target 格式串台、POSIX `\` 路径统一 `/`、CLI ParseValue 类型感知+JSON→rc2、MSBuild 异常聚合、推断链下沉 Core、缺省格式表单源、签名秘密改 `*EnvironmentVariable` 间址、旋钮覆盖机械化测试。
-3. **PR-3 Linux**：binLink 校验四后端收敛、PayloadSource 链接策略（目录链 Reject/WarnSkip、文件链策略化）、Archive 父前缀拒绝、RPM 2GiB 长标签、GNUPGHOME 出树、四浅门面接 Validate 缝、`ClaimDirectory` 收敛、apk 签名成员名对齐 abuild、i686-AppImage 矩阵收窄。
-4. **PR-4 Windows**：`Uninstall.exe` INSTDIR 归属校验（插件源码重建+provenance）、外部签名器走 ToolRunner、PFX `EphemeralKeySet`、`RmGetList` 先于 `RmShutdown`、21 语言恢复文案、LegacyMsiAutoDetect 收紧。
+1. **PR-1 Core+Abstractions**（`rework/core-abstractions`，**已合入 #142**，4 轮 Local Review 清零）：有界等待/FileTree 复用/validator 剥 null/桌面净化/命名与注入收口/秘密面/PathText 统一路径比较。
+2. **PR-2 入口层**（`rework/entry-layer`，**完成待统一合并 #144**，2 轮清零）：CLI 混合 target 格式串台、POSIX `\` 路径统一 `/`、CLI ParseValue 类型感知+JSON→rc2、MSBuild 异常聚合、推断链下沉 Core、缺省格式表单源、签名秘密改 `*EnvironmentVariable` 间址、旋钮覆盖机械化测试。
+3. **PR-3 Linux**（`rework/linux-backends`，**完成待统一合并 #145**，5 轮清零）：binLink 校验四后端收敛（`LinuxLinkName`）、PayloadSource 链接策略（in-tree 保留/外指拒绝/悬空拒绝/`link→.` 归一）、`PayloadPathBook` 共享簿记、Archive 父前缀拒绝+暂存件移出归档源、RPM 2GiB 长标签+Int64s、GNUPGHOME 出树进工作目录、四门面 `Validate` 接校验缝、apk 签名成员名对齐 abuild 且签名成员推导进校验缝、i686-AppImage 收窄为拒绝、AppImage 保留名前缀收口+异常口径分层（旋钮腿 ArgumentException/载荷腿 IOp）。
+4. **PR-4 Windows**（`rework/windows-backends`，**完成待统一合并 #146**，6 轮清零）：`Uninstall.exe` INSTDIR 归属校验（插件源码重建+provenance）、外部签名器走 ToolRunner、PFX `EphemeralKeySet`、`RmGetList` 先于 `RmShutdown`、21 语言恢复文案、LegacyMsiAutoDetect 收紧。
 5. **PR-5 macOS**：`MacSigningSupport` 共享化（凭据/keychain/参数生成单源）、codesign `--keychain` 替代搜索列表变异、productsign `--timestamp`、detach 统一、撞名簿、`.rtfd` 移除声明、`resize -limits` 字段序（macOS 实机复核登记）。
 6. **PR-6 UPDATE**：feed fetch/`TryRead`/argv `JoinArgv`/feed File 词法/pkg-apply 有界/ProcessAlive+MacAppGate fail-closed、**retained 包 root 侧重验签**（动 `Bundler.Updater.Bootstrap` 源码→必须 dispatch `produce-bootstrap` 重冻 8 件入库评审 + `syspkg-verify` 复验）。
 

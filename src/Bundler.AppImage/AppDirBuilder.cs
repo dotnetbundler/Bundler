@@ -55,10 +55,15 @@ internal static class AppDirBuilder
                 $"The AppDir install root must be a relative path inside the AppDir, got '{settings.InstallRoot}'.");
         }
 
-        var binLink = settings.BinLink is { Length: > 0 } ? settings.BinLink : packageName;
+        var binLink = settings.BinLink ?? packageName;
+        // 与 deb/rpm/apk 同规："" 或 "none" 关闭链接。
         if (string.Equals(binLink, "none", StringComparison.OrdinalIgnoreCase))
         {
             binLink = "";
+        }
+        if (binLink.Length > 0)
+        {
+            binLink = LinuxLinkName.Validate(binLink, "AppImageBinLink");
         }
         var mainExecutable = item.MainExecutable.Replace('\\', '/');
         if (mainExecutable.Length == 0 ||
@@ -81,7 +86,7 @@ internal static class AppDirBuilder
         var input = item.InputDirectory;
         var payloadRoot = Path.Combine(appDir, installRoot.Replace('/', Path.DirectorySeparatorChar));
         // 已落载荷的宿主路径登记册：Resources 撞名一律显式拒绝，不静默覆盖。
-        var claimed = new HashSet<string>(StringComparer.Ordinal);
+        var claimed = new HashSet<string>(PathText.Comparer);
         var update = bundle.Update;
         if (update is not null)
         {
@@ -93,7 +98,11 @@ internal static class AppDirBuilder
                 Path.Combine(payloadRoot,
                     UpdateBootstrapper.FileNameFor(item.Target.Target))));
         }
-        CopyTree(input, payloadRoot, logger, claimed);
+        // 与 deb/rpm/apk 同一链接契约：树内符号链接在 AppDir 内重放为真实
+        // symlink（mksquashfs 原样保留），树外/悬空链接拒绝。
+        MaterializeTree(
+            PayloadSource.CollectInput(input, installRoot, mainExecutable, logger),
+            appDir, claimed);
         if (update is not null)
         {
             UpdateIdentitySidecar.WriteIfEnabled(
@@ -110,48 +119,16 @@ internal static class AppDirBuilder
         }
         AppImageToolset.Chmod(mainHostPath, "+x");
 
-        foreach (var resource in bundle.Resources)
-        {
-            var target = resource.Destination.Replace('\\', '/').Trim('/');
-            if (target.Length == 0 || target.Split('/').Contains(".."))
-            {
-                throw new ArgumentException(
-                    $"The resource target must stay inside the payload: '{resource.Destination}'.");
-            }
-            var source = Path.GetFullPath(resource.Source);
-            var destinationDir = Path.Combine(payloadRoot, target.Replace('/', Path.DirectorySeparatorChar));
-            if (Directory.Exists(source))
-            {
-                CopyTree(source, destinationDir, logger, claimed);
-            }
-            else if (File.Exists(source))
-            {
-                if (Directory.Exists(destinationDir) ||
-                    !claimed.Add(Path.GetFullPath(destinationDir)))
-                {
-                    throw new InvalidOperationException(
-                        $"The resource target '{resource.Destination}' collides with an existing payload entry.");
-                }
-                Directory.CreateDirectory(Path.GetDirectoryName(destinationDir)!);
-                File.Copy(source, destinationDir, overwrite: true);
-            }
-            else
-            {
-                throw new FileNotFoundException(
-                    $"The resource source does not exist: {source}", source);
-            }
-        }
+        // 资源走同一枚举缝（目的地越界/链接源统一拒），落盘时与已登记条目撞名一致拒绝。
+        MaterializeTree(
+            PayloadSource.CollectResources(
+                bundle.Resources, installRoot, logger, includeDirectories: true),
+            appDir, claimed);
 
         var binDir = Path.Combine(appDir, "usr", "bin");
         Directory.CreateDirectory(binDir);
         if (binLink.Length > 0)
         {
-            if (binLink is "." or ".." ||
-                binLink.IndexOfAny(['/', '\\', ' ', '\t', '"', '\'', '$']) >= 0)
-            {
-                throw new ArgumentException(
-                    $"The AppImage bin-link must be a plain file name: '{binLink}'.");
-            }
             var linkTarget = RelativePath("usr/bin", installRoot + "/" + mainExecutable);
             AppImageToolset.Symlink(linkTarget, Path.Combine(binDir, binLink));
         }
@@ -227,11 +204,6 @@ internal static class AppDirBuilder
         // rejected rather than silently shadowed.
         if (settings.Files is { Count: > 0 } files)
         {
-            var reserved = new HashSet<string>(StringComparer.Ordinal)
-            {
-                "AppRun", ".DirIcon",
-                packageName + ".desktop", packageName + ".png"
-            };
             foreach (var entry in files)
             {
                 var destination = (entry.Destination ?? "").Replace('\\', '/').Trim('/');
@@ -243,7 +215,7 @@ internal static class AppDirBuilder
                     throw new ArgumentException(
                         $"BundlerAppImageFile destinations must be relative paths inside the AppDir, got '{entry.Destination}'.");
                 }
-                if (reserved.Contains(destination))
+                if (IsReservedEntry(packageName, destination))
                 {
                     throw new ArgumentException(
                         $"BundlerAppImageFile destination '{destination}' collides with a generated AppDir entry.");
@@ -260,7 +232,10 @@ internal static class AppDirBuilder
                     throw new ArgumentException(
                         $"BundlerAppImageFile destination '{destination}' already exists in the AppDir.");
                 }
-                Directory.CreateDirectory(Path.GetDirectoryName(hostDestination)!);
+                EnsureDirectories(appDir, Path.GetDirectoryName(hostDestination)!,
+                    path => new ArgumentException(
+                        $"BundlerAppImageFile destination '{entry.Destination}' collides " +
+                        $"with an existing file at '{path}'."));
                 File.Copy(source, hostDestination);
             }
         }
@@ -275,22 +250,97 @@ internal static class AppDirBuilder
         };
     }
 
-    private static void CopyTree(
-        string source, string destination, IBundleLogger log,
-        HashSet<string>? claimed = null) =>
-        FileTree.CopyTree(source, destination, log,
-            links: TreeLinkPolicy.WarnSkip,
-            sortEntries: true,
-            resolveFileDestination: claimed is null ? null : (file, dir) =>
+    /// <summary>Generated AppDir root entries <c>BundlerAppImageFile</c> may not shadow.</summary>
+    internal static HashSet<string> ReservedNames(string packageName) =>
+        new(StringComparer.Ordinal)
+        {
+            "AppRun", ".DirIcon",
+            packageName + ".desktop", packageName + ".png"
+        };
+
+    /// <summary>
+    /// 生成件保留命中——保留名本身或其下的路径（保留名是文件；
+    /// <c>AppRun/x</c> 会把 AppRun 落成目录，同样冲突）。POSIX 精确。
+    /// </summary>
+    internal static bool IsReservedEntry(string packageName, string destination) =>
+        ReservedNames(packageName).Any(r =>
+            string.Equals(destination, r, StringComparison.Ordinal) ||
+            destination.StartsWith(r + '/', StringComparison.Ordinal));
+
+    /// <summary>
+    /// 逐级建父目录——任一前缀被已落文件/链接占位时按 <paramref name="occupied"/>
+    /// 抛错：载荷落盘腿给 InvalidOperationException（与 claimed 簿同口径），
+    /// BundlerAppImageFile 旋钮腿给 ArgumentException（与相邻目的地校验同口径）；
+    /// 都比裸 <see cref="Directory.CreateDirectory"/> 的 IOException 可读。
+    /// </summary>
+    private static void EnsureDirectories(
+        string appDir, string parent, Func<string, Exception> occupied)
+    {
+        var chain = new List<string>();
+        for (var dir = parent; dir is not null &&
+             !string.Equals(dir, appDir, PathText.Comparison);
+             dir = Path.GetDirectoryName(dir))
+        {
+            chain.Add(dir);
+        }
+        for (var i = chain.Count - 1; i >= 0; i--)
+        {
+            if (File.Exists(chain[i]))
             {
-                var target = Path.Combine(dir, Path.GetFileName(file));
-                if (!claimed.Add(Path.GetFullPath(target)))
+                throw occupied(chain[i]);
+            }
+            Directory.CreateDirectory(chain[i]);
+        }
+    }
+
+    /// <summary>
+    /// 把 <see cref="PayloadSource"/> 枚举出的条目落到 AppDir：目录创建、
+    /// 文件复制、符号链接按目标文本重建；每个宿主路径经 <paramref name="claimed"/>
+    /// 登记，与已落载荷（含更新保留名）撞名显式拒绝。
+    /// </summary>
+    private static void MaterializeTree(
+        IEnumerable<PayloadSourceItem> items,
+        string appDir,
+        HashSet<string> claimed)
+    {
+        foreach (var item in items)
+        {
+            var hostPath = Path.Combine(
+                appDir, item.ArchivePath.Replace('/', Path.DirectorySeparatorChar));
+            var full = Path.GetFullPath(hostPath);
+            if (item.Kind == PayloadSourceKind.Directory)
+            {
+                // 反向碰撞：目录条目落在一个已登记的文件/链接路径上同样拒绝；
+                // 父链任一前缀被已落文件/链接占位（含子目录资源）也拒绝。
+                if (File.Exists(hostPath) || !claimed.Add(full))
                 {
                     throw new InvalidOperationException(
-                        $"A resource file collides with an existing payload entry: '{Path.GetFullPath(target)}'.");
+                        $"A resource directory collides with an existing payload entry: '{full}'.");
                 }
-                return target;
-            });
+                EnsureDirectories(appDir, Path.GetDirectoryName(hostPath)!,
+                    path => new InvalidOperationException(
+                        $"A payload directory collides with an existing file: '{path}'."));
+                Directory.CreateDirectory(hostPath);
+                continue;
+            }
+            if (Directory.Exists(hostPath) || !claimed.Add(full))
+            {
+                throw new InvalidOperationException(
+                    $"A resource file collides with an existing payload entry: '{full}'.");
+            }
+            EnsureDirectories(appDir, Path.GetDirectoryName(hostPath)!,
+                path => new InvalidOperationException(
+                    $"A payload directory collides with an existing file: '{path}'."));
+            if (item.Kind == PayloadSourceKind.Symlink)
+            {
+                AppImageToolset.Symlink(item.LinkTarget!, hostPath);
+            }
+            else
+            {
+                File.Copy(item.SourcePath!, hostPath);
+            }
+        }
+    }
 
 
     // POSIX relative path between two slash-separated AppDir-relative paths

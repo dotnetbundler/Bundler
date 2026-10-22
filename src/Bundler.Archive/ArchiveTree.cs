@@ -33,13 +33,40 @@ internal static class ArchiveTree
         if (settings.Files is { Count: > 0 } files)
         {
             var reserved = new HashSet<string>(entries.Select(e => e.ArchivePath), StringComparer.Ordinal);
+            var directories = new HashSet<string>(
+                entries.Where(e => e.Kind == TarEntryKind.Directory).Select(e => e.ArchivePath),
+                StringComparer.Ordinal);
+            var leaves = new HashSet<string>(
+                entries.Where(e => e.Kind != TarEntryKind.Directory).Select(e => e.ArchivePath),
+                StringComparer.Ordinal);
             foreach (var file in files)
             {
                 var destination = ValidateDestination(file.Destination);
-                if (!reserved.Add(destination))
+                // 目标落进目录撞目录、父前缀被文件/链接占位都显式拒绝——
+                // tar/zip 里"父是文件、下有子项"会产出解压即坏的包。
+                var segments = destination.Split('/');
+                var prefixBlocked = false;
+                var prefix = "";
+                for (var i = 0; i < segments.Length - 1; i++)
+                {
+                    prefix = i == 0 ? segments[0] : prefix + "/" + segments[i];
+                    if (leaves.Contains(prefix))
+                    {
+                        prefixBlocked = true;
+                        break;
+                    }
+                }
+                if (directories.Contains(destination) || prefixBlocked || !reserved.Add(destination))
                 {
                     throw new ArgumentException(
                         $"BundlerArchiveFile destination '{destination}' collides with an existing payload entry.");
+                }
+                // 新认领条目要回写簿记：目的地本身是叶，隐式父前缀在归档里是目录——
+                // 不登记会让同一 Files 列表内 "a/b" 与 "a/b/c" 形态滑过。
+                leaves.Add(destination);
+                for (var i = 0; i < segments.Length - 1; i++)
+                {
+                    directories.Add(i == 0 ? segments[0] : string.Join("/", segments.Take(i + 1)));
                 }
                 var source = RequireExisting(file.Source);
                 entries.Add(new Entry
@@ -188,7 +215,8 @@ internal static class ArchiveTree
             0xBEBAFECA or 0xBFBAFECA;    // fat, little-endian on disk
     }
 
-    private static string ValidateDestination(string? destination)
+    // Exported for ArchiveValidation so `bundler validate` exercises the same checks.
+    internal static string ValidateDestination(string? destination)
     {
         var normalized = (destination ?? "").Trim('/');
         if (normalized.Length == 0 || (destination ?? "").Contains('\\') ||
@@ -201,7 +229,7 @@ internal static class ArchiveTree
         return normalized;
     }
 
-    private static string RequireExisting(string source)
+    internal static string RequireExisting(string source)
     {
         var fullPath = Path.GetFullPath(source ?? "");
         if (!File.Exists(fullPath))

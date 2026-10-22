@@ -35,6 +35,12 @@ public sealed class AlpineApkBundler : IFormatBundler
             throw new NotSupportedException(
                 $"DotNet.Bundler.AlpineApk accepts AlpineApk targets only; '{unsupported}' requires another backend package.");
         }
+        // 与 Build 同一条校验链——validate 阶段即暴露配置错误。
+        ApkValidation.Settings(_configuration, bundle);
+        foreach (var target in bundle.Targets)
+        {
+            ApkValidation.Target(_configuration, bundle, BundleTarget.Parse(target.Target));
+        }
     }
 
     public async Task<IReadOnlyList<BundleArtifact>> BuildAsync(
