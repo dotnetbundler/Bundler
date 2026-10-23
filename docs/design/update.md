@@ -40,6 +40,9 @@ deb/rpm/alpineapk 的 installer-replay 扩展为冻结后设计定稿项（§2�
 - **macOS**：新 `.app` 签名/公证由 MacApp 管线打包期完成。
   更新器职责=换包前 `codesign --verify` 且签名身份与旧包一致（防劫持）+剥 `com.apple.quarantine`+`open -n` 重启。
   签名态探测 fail-closed：`codesign` 不可运行/输出不可判与"确证未签名"分流——判不出签名态一律拒换（已签旧件被未签件降级、跨 Team-ID 换装同样拒）；Info.plist 为二进制 plist 时经 `/usr/libexec/PlistBuddy` 兜底解 bundle id。
+  AOT 与 POSIX `sh` 降级件同口径：AOT 以出口 -1（spawn 失败/超时）判探测失败，`sh` 以 `codesign` 出口 126/127（不可执行/缺席）判探测失败，均拒换 rc=4。
+  身份只认 `TeamIdentifier`：无 Team 的签名（ad-hoc、自签证书——`codesign -dv` 报 `TeamIdentifier=not set`）视同未签，不跑 `--verify`、无身份可比，仅 `CFBundleIdentifier` 一致兜底；已签（有 Team）→ 无 Team 按降级拒。
+  这是语义边界而非缺陷：门禁防的是跨签名者劫持，Team ID 是 Apple 体系内唯一可比的签名者身份。
 - **清单取信次序**：`<feed>.sig` 旁车先于 JSON 解析验签（签名防伪先于内容语义）；`artifact.file` 词法收口为单段文件名（分隔符/`..`/绝对路径一律拒——签名保真不保意图，落盘名不信远端词法），`url`/`sha256` 同列必携、缺即拒；畸形清单的显式 null 与缺省键同归 `UpdateException`（netstandard DCS 不跑字段初始化器，消费面不允许裸 NRE）；
   http(s) `.part` 断点续传核对 `Content-Range`，断点态不一致即弃 `.part` 从头干净拉；
   抓取/IO/HTTP/畸形 JSON/坏公钥全归 `UpdateException` 确定性契约，用户取消（cancellation）原样穿透不包。
@@ -192,7 +195,8 @@ apk `apk add` 旧版本地件原生放行降级（alpine 容器实证：rc=0、�
   降权器逐级最小 argv 预检（`spawn` 只证分叉不证收参）由此腿实证补入双实现。
 - deb/rpm/alpineapk 客户端 replay 编排（`SyspkgReplay`，UPDATE 系统包扩展 B3）：预检三件套（构造闸 `pkg` 名 + 前端退化链 `command -v` + 账本归属双检）、留存目录 + `applied` 标记、三级提权退化链拉起安装位 `bundler-updater pkg-apply`（`alpineapk`→`apk` 映射、拉起即退；退化判据=工具缺席/spawn 前失败，已启动腿任意 rc 不重放、取消/拒绝/鉴权失败停链、问密码取消不触 sudo）、rollback 拣留存旧包同链重放——unit 探针族跨宿主断言 + integration 真进程层道具（rc 原样/窗外清理/spawn 换腿）+ POSIX 垫片 e2e 仅 Linux 宿主执行（非 Linux 腿 skip）全绿。
 
-部分实现/外部待验收：macOS 同签名身份比对腿（无 Apple 证书，挂 `docs/project/special-acceptance.md`）。
+已实现：macOS `.app` 签名门禁决策表（同队放行/跨队拒/篡改拒/已签→未签或无 Team 降级拒/探测失败拒/BundleID 兜底，12 例）——AOT 腿 Unit `MacAppGateDecisionTests`（`GateTool` 缝注入桩 `codesign` 输出）与 `sh` 腿 Integration `MacAppGateShTests`（PATH 前置桩 `codesign`、真跑 `bundler-updater.sh apply`）共用同表。
+外部待验收：真 Apple Developer ID 签名链下的同身份比对（自签证书 `TeamIdentifier` 恒 `not set` 测不到已签分支；`MacAppGateTests` 真证书腿经 `BUNDLER_TEST_MAC_SIGNING_P12[_B]` 提供证书即可跑，挂 `docs/project/special-acceptance.md` SA-P-07）。
 
 外部待验收（UPDATE 系统包扩展阶段，设计定稿见 §2）：
 

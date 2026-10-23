@@ -16,10 +16,19 @@ internal static class MacAppGate
         payloadDir.EndsWith(".app", StringComparison.Ordinal) ||
         File.Exists(Path.Combine(payloadDir, "Contents", "Info.plist"));
 
-    internal static void CheckAndStrip(string installDir, string payloadDir, Action<string> log)
+    // 外部工具执行缝：出口码 -1 专指"工具没跑起来"（spawn 失败/超时）。
+    internal delegate (int ExitCode, string StdOut, string StdErr) GateTool(string path, params string[] arguments);
+
+    internal static void CheckAndStrip(string installDir, string payloadDir, Action<string> log) =>
+        CheckAndStrip(installDir, payloadDir, log, RunTool);
+
+    // 测试缝：注入桩 codesign/xattr/PlistBuddy 输出，无 Apple 证书即可覆盖已签分支
+    // 决策表（同队/跨队/篡改/降级/无 Team/探测失败）；生产入口恒走真 RunTool。
+    internal static void CheckAndStrip(
+        string installDir, string payloadDir, Action<string> log, GateTool runTool)
     {
-        var oldIdentity = TryReadSigningIdentity(installDir, out var oldProbeFailed);
-        var newIdentity = TryReadSigningIdentity(payloadDir, out var newProbeFailed);
+        var oldIdentity = TryReadSigningIdentity(installDir, runTool, out var oldProbeFailed);
+        var newIdentity = TryReadSigningIdentity(payloadDir, runTool, out var newProbeFailed);
         // codesign 起不来/超时 ≠ 未签——签名门禁判定器缺席时若按"未签"放行，
         // 等于把"已签→未签降级/跨身份劫持"判定整扇拆掉（无法执行的探测把
         // 已签安装静默降级成可换）。stock macOS 恒有 codesign，缺席即异常宿主
@@ -34,7 +43,7 @@ internal static class MacAppGate
         if (newIdentity is { } signed)
         {
             // 签了名就必须完好——坏签/残签视同篡改件拒绝。
-            var verify = RunTool("/usr/bin/codesign", "--verify", "--deep", "--strict", payloadDir);
+            var verify = runTool("/usr/bin/codesign", "--verify", "--deep", "--strict", payloadDir);
             if (verify.ExitCode != 0)
             {
                 throw new UpdateRejectedException(
@@ -69,8 +78,8 @@ internal static class MacAppGate
         }
 
         // CFBundleIdentifier 一致兜底：未签场景下防“拿别的应用来换”。
-        var oldBundleId = TryReadBundleId(Path.Combine(installDir, "Contents", "Info.plist"));
-        var newBundleId = TryReadBundleId(Path.Combine(payloadDir, "Contents", "Info.plist"));
+        var oldBundleId = TryReadBundleId(Path.Combine(installDir, "Contents", "Info.plist"), runTool);
+        var newBundleId = TryReadBundleId(Path.Combine(payloadDir, "Contents", "Info.plist"), runTool);
         if (oldBundleId is { Length: > 0 } && newBundleId is { Length: > 0 } &&
             !string.Equals(oldBundleId, newBundleId, StringComparison.Ordinal))
         {
@@ -79,7 +88,7 @@ internal static class MacAppGate
         }
 
         // 更新件经下载通道而来会带 quarantine；签名/身份核验过后剥掉，免首跑拦截。
-        var strip = RunTool("/usr/bin/xattr", "-dr", "com.apple.quarantine", payloadDir);
+        var strip = runTool("/usr/bin/xattr", "-dr", "com.apple.quarantine", payloadDir);
         log(strip.ExitCode == 0
             ? "bundler-updater: quarantine stripped from payload"
             : "bundler-updater: quarantine not present (ok)");
@@ -88,14 +97,15 @@ internal static class MacAppGate
     // codesign -dv 读签名身份；未签 → null。Identifier+TeamIdentifier 都在 stderr。
     // probeFailed 出参区分两种"未签"：codesign 实跑判未签（正常放行路径）vs
     // 工具不可执行/超时（-1 出口，fail-closed 场景必须可区分）。
-    private static SigningIdentity? TryReadSigningIdentity(string bundleDir, out bool probeFailed)
+    private static SigningIdentity? TryReadSigningIdentity(
+        string bundleDir, GateTool runTool, out bool probeFailed)
     {
         probeFailed = false;
         if (!Directory.Exists(bundleDir))
         {
             return null;
         }
-        var result = RunTool("/usr/bin/codesign", "-dv", "--verbose=4", bundleDir);
+        var result = runTool("/usr/bin/codesign", "-dv", "--verbose=4", bundleDir);
         if (result.ExitCode == -1)
         {
             probeFailed = true;
@@ -116,7 +126,7 @@ internal static class MacAppGate
     // Info.plist 可能是 XML 或二进制：XML 直接正则取值；二进制（bplist00 魔数）
     // 退化 /usr/libexec/PlistBuddy 取值——与 sh 腿同件同键。再取不到按缺省
     // （该兜底项跳过，签名门禁仍是主判据）。
-    private static string? TryReadBundleId(string infoPlist)
+    private static string? TryReadBundleId(string infoPlist, GateTool runTool)
     {
         if (!File.Exists(infoPlist))
         {
@@ -141,7 +151,7 @@ internal static class MacAppGate
         {
             return null;
         }
-        var buddy = RunTool("/usr/libexec/PlistBuddy", "-c", "Print :CFBundleIdentifier", infoPlist);
+        var buddy = runTool("/usr/libexec/PlistBuddy", "-c", "Print :CFBundleIdentifier", infoPlist);
         return buddy.ExitCode == 0 && buddy.StdOut.Trim() is { Length: > 0 } value
             ? value
             : null;
