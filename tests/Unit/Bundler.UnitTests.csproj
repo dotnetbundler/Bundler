@@ -15,6 +15,7 @@
     <Compile Include="..\Shared\TempBase.cs" />
     <Compile Include="..\Shared\TempDir.cs" />
     <Compile Include="..\Shared\TestPlatform.cs" />
+    <Compile Include="..\Shared\MacAppGateCases.cs" />
     <Compile Include="..\Shared\MiniAr.cs" />
     <Compile Include="..\Shared\MiniTar.cs" />
     <!-- bundler.json → BundleConfiguration 加载器只服务测试（src 产物不留第二装载面） -->

@@ -3,8 +3,8 @@
 > 最后更新：2026-10-23
 > 当前基线：`main@fc3b6d2`——macOS 27 管道创建缺陷修复 PR #150 已 squash 合入，合并树与 CI 验证头 `0a76dfb` 逐文件零差异（同树 `18c55cb`）。
 > 此前全功能面体检收口的 PR #142、#144–#149 均已 squash 合入；`9999e6e` 代码树与 verify 验证头 `dd64c9a` 逐文件零差异。
-> 当前阶段：**无进行中阶段**。
-> 当前包版本：`0.1.0-alpha.110`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）。
+> 进行中：分支 `fix/mac-app-gate-evidence`（`.app` 签名门禁已签分支证据 + `sh` fail-closed，见 §5），待 CI 验证与用户授权合入 `main`。
+> 当前包版本：`0.1.0-alpha.111`（该分支；`main` 为 `0.1.0-alpha.110`）。
 > 全部 11 个格式、CLI 与 UPDATE 均已冻结（冻结指功能面不扩展，缺陷修复照走），全功能面体检收口已完成。
 > 目标模型已定型——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `{os}[-{libc}]-{arch}` canonical 词，契约与全产物名目录见 `docs/design/targets.md`。
 >
@@ -100,12 +100,18 @@ UPDATE 系统包扩展（deb/rpm/alpineapk installer-replay 自更新）B0–B5 
   该腿此前于 verify `39368446045` 以 120s 窗口失败过一次并于 PR #148 放宽至 300s，本次 300s 仍未达——窗口内快照可见 `smartscreen.exe`，但快照白名单不含安装器进程，根因未证实；
   与本修复无关（Windows 不走 `NativeSpawnUnix`，NSIS 安装链不经 updater 引导件），首次失败现场存本机诊断目录；按失败留痕 `rerun --failed` 复跑。
   attempt 2 全绿 47/47（六宿主测试、produce/consume/manual/universal、`syspkg-verify` deb/rpm/apk 三容器——重冻 musl 引导件真装/更新/回滚通过）。
+- **`.app` 签名门禁证据分支**（`fix/mac-app-gate-evidence@dde8a20`，alpha.111）：
+  本机 macOS 27：Unit 1647 / 失败 4（均为已登记 provenance 环境的 `ArchiveTests`）；门禁/引导件一致性/更新链集成 104 / 0 失败；
+  AOT 决策表 12/12、`sh` 决策表 12/12；反向变异——去掉 AOT fail-closed 与跨队比较各命中 `ProbeFails`/`CrossTeam`，`sh` 换回 `main` 旧脚本命中 `ProbeFails`（实证旧 `sh` fail-open）；
+  真证书腿未提供证书即 Skip、提供无效证书即失败（实测）。
+  CI `xcode-27` suite=all run `39989905023`：Unit 1647/0 失败、Api 84/0、Integration 336/0（`MacAppGateShTests` 12/12 实跑零 Skip）、Package 19/0。
+  verify run `39989916906` attempt 1 全绿 47/47（含 Linux dash 与 syspkg 三容器）。
 - **CI 故障归属结论**（仍有效）：
   MSI 类 restore 超时根因已证实并根治（签名包吊销检查走 HTTP/80，处置见 `docs/design/testing.md` §3.11），修复后 windows-arm 腿零 restore 超时；
   NSIS 安装器 rc=0xC000013A 与 UbuntuARM runner 失联归 runner 基建瞬断（未复现、无产品面证据）；
   macOS intel 挂死根因为 .NET Unix `Process.Start` spawn/reap 全局锁死锁（dotnet/runtime #135294 同族，10.x 无修复），已以 `NativeSpawnUnix`（libc `posix_spawn`）弃用 Unix `Process` 根治，原理见 `docs/design/architecture.md`。
   残余：`posix_spawn` 内部仍 fork+shim，最深层机况下单次调用可堵，但无共享锁不传染，60s 弃件后进程存活。
-- **引导件冻件口径**：现嵌 8 件为 produce-bootstrap run `39962028724`@`6f899d0` 产出（五平台腿全绿），SHA-256 账留 PR #150 分支提交 `770454c` 消息。
+- **引导件冻件口径**：`main` 现嵌 8 件为 produce-bootstrap run `39962028724`@`6f899d0` 产出（PR #150，SHA-256 账留提交 `770454c` 消息）；分支 `fix/mac-app-gate-evidence` 重冻为 run `39989472655`@`99605d5`（含 `MacAppGate` `GateTool` 缝，生产行为不变）。
   `NativeSpawnUnix`（含建管 `O_CLOEXEC`/`ENOSYS` 平台口径修复）+ musl static-pie `DirectPInvoke` 直绑 + `WorkingDirectory=""` PATH 基准修复 + `EnvironmentIsComplete` 完整环境块全链在冻件内。- **公开 API 破改登记**：`Bundler.Updater` 包面 `UpdateClient.Apply`/`Rollback` 返回类型由 `System.Diagnostics.Process` 换为 `ToolProcess`（快速开发期不背兼容债，见 `docs/design/update.md`）。
 
 ## 4. 外部验收边界（未执行，不视为完成）
@@ -130,9 +136,11 @@ UPDATE 系统包扩展（deb/rpm/alpineapk installer-replay 自更新）B0–B5 
   `MacArchiveTools` 只要载荷有任何 xattr 即改走宿主 `ditto`/`tar` 保留 xattr，产物失去确定性、symlink 表示随之改变。
   本机 4 个 `ArchiveTests` 与 2 个 `ArchiveApiTests` 因此失败；CI runner 无该属性故不暴露。
   待裁决：是否把 `com.apple.provenance`（及同类系统管理属性）排除在 xattr 判定之外。
-- **macOS 27 上自签签名身份腿全 Skip**（本轮发现，未处置）：
-  `MacAppGateTests` 5 条自签身份腿在本机与 CI `xcode-27` 上均因 `.p12` 导入临时钥匙串后 `find-identity` 识别 0 个有效身份而按设计 Skip；
-  这些腿在 `macos-26`/`macos-26-intel` 上仍覆盖，macOS 27 上签名门禁的同队/跨队/篡改判定暂无自动化证据；根因（macOS 27 钥匙串行为或测试证书生成口径）未查。
+- **`.app` 签名门禁已签分支无自动化证据**（处置中：分支 `fix/mac-app-gate-evidence`）：
+  更正：此前记为"仅 macOS 27 Skip、macos-26 仍覆盖"有误——`MacAppGateTests` 5 条自签身份腿自 #101 起在 macos-26/macos-26-intel/xcode-27 全部 Skip，从未实跑。
+  根因：自签证书 `CSSMERR_TP_NOT_TRUSTED` 被 `find-identity -v` 排除；即便绕过，自签签出 `TeamIdentifier=not set`，门禁视同未签，已签分支（同队/跨队/篡改/降级）在自签下不可达。
+  另：POSIX `sh` 门禁 `codesign` 不可执行时拿空 Team 按未签放行（fail-open），与 AOT fail-closed 不一致。
+  处置：`MacAppGate` 增 `GateTool` 缝 + 共享决策表 12 例（AOT Unit / `sh` Integration）；`sh` 改 126/127 fail-closed；真证书腿改读 `BUNDLER_TEST_MAC_SIGNING_P12[_B]`；`update.md`/SA-P-07 措辞更正。
 - **NSIS 中断装钩位等待超时复发**（既有偶发，未处置）：
   `NsisIntegrationTests.InterruptedInstallManifestMismatchAndTamperRejections` 在 windows-2025 腿两次未见钩位标记（`39368446045` 120s 窗口、`39962835463` attempt 1 的 300s 窗口），复跑均通过；
   300s 仍未达说明不只是负载慢，疑似安装器被拦截或挂起（窗口内见 `smartscreen.exe`，未证实）；

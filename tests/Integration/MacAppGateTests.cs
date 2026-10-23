@@ -1,9 +1,10 @@
 // MacAppGate 门禁真件腿（macOS 宿主）：codesign/xattr 走系统工具，Unit 层零子进程规则不收。
 // 断言面对应 MacAppGate.CheckAndStrip 三分支：
 //   零证书面（恒可自动化）——CFBundleIdentifier 兜底拒换 + quarantine 剥离；
-//   签名身份面（尽力腿）——临时 keychain 自签证书：自签件 codesign -dv 的 TeamIdentifier
-//   取自证书 Subject OU，实证取到非空值才跑（降级拒/跨 TeamID 拒/坏签拒/同队放行）；
-//   取不到（"not set"）即诚实 Skip——生产证书签名链仍归 special-acceptance SA-P-07。
+//   签名身份面（真证书腿）——自签证书签出的 TeamIdentifier 恒为 "not set"（门禁视同未签），
+//   测不到已签分支；故改由环境变量提供带 Team ID 的真 .p12（BUNDLER_TEST_MAC_SIGNING_P12[_B]
+//   及同名 _PASSWORD[_B]），未提供即诚实 Skip——SA-P-07 取得 Developer ID 证书时直接跑本类。
+//   已签分支决策表的常驻自动化证据见 Unit MacAppGateDecisionTests（AOT）与 MacAppGateShTests（sh）。
 using System.Text.RegularExpressions;
 using DotNet.Bundler;
 using DotNet.Bundler.MacApp;
@@ -28,9 +29,10 @@ public sealed class MacAppGateFixture : IDisposable
 
 public sealed class MacAppGateTests : IClassFixture<MacAppGateFixture>
 {
-    // 自签 p12 的固定假口令与环境变量名：测试专用材料，与真实签名资产无关。
-    private const string P12PasswordEnvVar = "BUNDLER_TEST_P12_PASS";
-    private const string P12Password = "bundler-test-p12";
+    // 真证书腿的输入：A=主身份；B=异队身份（只跨队腿需要）。口令经 TemporaryKeychain
+    // 落 0600 口令文件再以 openssl -passin file: 解包，全程不进 argv。
+    private const string P12EnvVar = "BUNDLER_TEST_MAC_SIGNING_P12";
+    private const string P12PasswordEnvVar = "BUNDLER_TEST_MAC_SIGNING_P12_PASSWORD";
 
     private IntegrationWorkspace Ws => _fixture.Ws;
     private readonly MacAppGateFixture _fixture;
@@ -88,8 +90,7 @@ public sealed class MacAppGateTests : IClassFixture<MacAppGateFixture>
         // 已签 → 未签是更新通道劫持的常见形态，降级必须拒。
         Assert.SkipUnless(TestPlatform.IsMacOS, "codesign/xattr 门禁只在 macOS 宿主存在。");
         var directory = Ws.Combine("downgrade");
-        using var identity = RequireIdentity(
-            Path.Combine(directory, "signing"), "BundlerGateAlpha", "GATEAAAAAA");
+        using var identity = RequireIdentity(Path.Combine(directory, "signing"));
         var install = MacAppStub.WriteBundle(
             Path.Combine(directory, "install-slot"), "App", "com.bundler.gate",
             machOExecutable: true);
@@ -113,8 +114,7 @@ public sealed class MacAppGateTests : IClassFixture<MacAppGateFixture>
         // 腿断言的不只是门禁放行，而是放行后换包真实成立（载荷落位）。
         Assert.SkipUnless(TestPlatform.IsMacOS, "codesign/xattr 门禁只在 macOS 宿主存在。");
         var directory = Ws.Combine("unsigned-install-signed-payload");
-        using var identity = RequireIdentity(
-            Path.Combine(directory, "signing"), "BundlerGateAlpha", "GATEAAAAAA");
+        using var identity = RequireIdentity(Path.Combine(directory, "signing"));
         var install = MacAppStub.WriteBundle(
             Path.Combine(directory, "install-slot"), "App", "com.bundler.gate",
             machOExecutable: true);
@@ -148,10 +148,8 @@ public sealed class MacAppGateTests : IClassFixture<MacAppGateFixture>
         var directory = Ws.Combine("cross-team");
         // 临时 keychain 不碰用户搜索列表：codesign 经 --keychain 直给身份，
         // Dispose 只删 keychain 件——销毁序不再承重，using 逆序仅作惯例。
-        using var alpha = RequireIdentity(
-            Path.Combine(directory, "signing-a"), "BundlerGateAlpha", "GATEAAAAAA");
-        using var beta = RequireIdentity(
-            Path.Combine(directory, "signing-b"), "BundlerGateBeta", "GATEBBBBBB");
+        using var alpha = RequireIdentity(Path.Combine(directory, "signing-a"));
+        using var beta = RequireIdentity(Path.Combine(directory, "signing-b"), secondary: true);
         Assert.NotEqual(alpha.TeamId, beta.TeamId);
         var install = MacAppStub.WriteBundle(
             Path.Combine(directory, "install-slot"), "App", "com.bundler.gate",
@@ -176,8 +174,7 @@ public sealed class MacAppGateTests : IClassFixture<MacAppGateFixture>
         // 自签后篡改 bundle 内密封件 → codesign --verify --deep --strict 不过即拒。
         Assert.SkipUnless(TestPlatform.IsMacOS, "codesign/xattr 门禁只在 macOS 宿主存在。");
         var directory = Ws.Combine("tampered");
-        using var identity = RequireIdentity(
-            Path.Combine(directory, "signing"), "BundlerGateAlpha", "GATEAAAAAA");
+        using var identity = RequireIdentity(Path.Combine(directory, "signing"));
         var install = MacAppStub.WriteBundle(
             Path.Combine(directory, "install-slot"), "App", "com.bundler.gate");
         var payload = MacAppStub.WriteBundle(
@@ -200,8 +197,7 @@ public sealed class MacAppGateTests : IClassFixture<MacAppGateFixture>
         // 正面对照：同 TeamID 已签换已签 → 通过，且 quarantine 照常剥离。
         Assert.SkipUnless(TestPlatform.IsMacOS, "codesign/xattr 门禁只在 macOS 宿主存在。");
         var directory = Ws.Combine("same-team");
-        using var identity = RequireIdentity(
-            Path.Combine(directory, "signing"), "BundlerGateAlpha", "GATEAAAAAA");
+        using var identity = RequireIdentity(Path.Combine(directory, "signing"));
         var install = MacAppStub.WriteBundle(
             Path.Combine(directory, "install-slot"), "App", "com.bundler.gate",
             machOExecutable: true);
@@ -252,83 +248,34 @@ public sealed class MacAppGateTests : IClassFixture<MacAppGateFixture>
             $"|quarantine={MacAppStub.HasQuarantine(entry)}";
     }
 
-    // 自签身份尽力腿：不可用即诚实 Skip——断言的是真 codesign 链，不伪造环境。
-    private static SigningIdentity RequireIdentity(string workDir, string commonName, string ou)
+    // 真证书腿：未提供 .p12 即诚实 Skip——断言的是真 codesign 链，不伪造环境。
+    private static SigningIdentity RequireIdentity(string workDir, bool secondary = false)
     {
-        var identity = TryCreateIdentity(workDir, commonName, ou, out var reason);
-        Assert.SkipWhen(identity is null,
-            $"SKIP: 自签证书身份面在此宿主不可用——{reason}；该面归 special-acceptance SA-P-07。");
+        var suffix = secondary ? "_B" : "";
+        var p12 = Environment.GetEnvironmentVariable(P12EnvVar + suffix);
+        var password = Environment.GetEnvironmentVariable(P12PasswordEnvVar + suffix);
+        Assert.SkipWhen(string.IsNullOrEmpty(p12) || password is null,
+            $"SKIP: 未提供 {P12EnvVar}{suffix}/{P12PasswordEnvVar}{suffix}（带 Team ID 的真 .p12）——" +
+            "自签证书 TeamIdentifier 恒 not set 测不到已签分支；决策表由 MacAppGateDecisionTests/" +
+            "MacAppGateShTests 桩覆盖，真签名链归 special-acceptance SA-P-07。");
+        var identity = TryCreateIdentity(workDir, p12!, password!, out var reason);
+        // 已提供证书却用不起来是配置错误，不是宿主能力缺口——失败而非 Skip。
+        Assert.True(identity is not null, $"{P12EnvVar}{suffix} 提供的证书不可用：{reason}");
         return identity!;
     }
 
-    // 临时 keychain 自签证书链：openssl 造 codeSigning EKU 自签件 → TemporaryKeychain 导入
-    // （生产同款"--keychain 直给 + 用完删件"语义，不触碰用户搜索列表）→ 签探针件实证 TeamIdentifier。
-    // 任一步不成立返回 null（reason 出参带现场），不抛出——调用方决定 Skip。
+    // 临时 keychain 导入调用方提供的 .p12（生产同款"--keychain 直给 + 用完删件"语义，
+    // 不触碰用户搜索列表）→ 签探针件实证 TeamIdentifier。任一步不成立返回 null（reason 带现场）。
     private static SigningIdentity? TryCreateIdentity(
-        string workDir, string commonName, string ou, out string reason)
+        string workDir, string p12Path, string password, out string reason)
     {
         reason = "";
-        if (!ExternalTools.Has("openssl"))
-        {
-            reason = "openssl is unavailable on this host";
-            return null;
-        }
         Directory.CreateDirectory(workDir);
-        // 证书 Subject OU 即 codesign 填进 TeamIdentifier 的字段（签名后实证）。
-        var config = Path.Combine(workDir, "cert.cnf");
-        File.WriteAllText(config,
-            "[ req ]\n" +
-            "distinguished_name = dn\n" +
-            "x509_extensions = ext\n" +
-            "prompt = no\n" +
-            "[ dn ]\n" +
-            $"CN = {commonName}\n" +
-            $"OU = {ou}\n" +
-            "[ ext ]\n" +
-            "keyUsage = digitalSignature\n" +
-            "extendedKeyUsage = codeSigning\n" +
-            "basicConstraints = critical,CA:FALSE\n");
-        var keyPath = Path.Combine(workDir, commonName + ".key.pem");
-        var certPath = Path.Combine(workDir, commonName + ".cert.pem");
-        var p12Path = Path.Combine(workDir, commonName + ".p12");
-        var request = ProcessRunner.Run("openssl",
-            ["req", "-x509", "-newkey", "rsa:2048", "-nodes",
-             "-keyout", keyPath, "-out", certPath, "-days", "1", "-config", config],
-            new ProcessRunner.Options { WorkingDirectory = workDir });
-        if (request.ExitCode != 0)
-        {
-            reason = $"openssl req failed rc={request.ExitCode}: {request.StdErr.Trim()}";
-            return null;
-        }
-        // p12 口令是测试专用假材料（自签件即用即弃，不进真实密钥链），经 env:
-        // 传给 openssl——不占 argv（仓规"秘密不入命令行"）；CI LibreSSL 拒收
-        // 空口令 pass: 形（解包侧报 "certificate password must not appear in
-        // process arguments"），故固定假口令走环境变量注入。
-        var exported = ProcessRunner.Run("openssl",
-            ["pkcs12", "-export", "-out", p12Path,
-             "-inkey", keyPath, "-in", certPath,
-             "-passout", "env:" + P12PasswordEnvVar],
-            new ProcessRunner.Options
-            {
-                WorkingDirectory = workDir,
-                Environment = new Dictionary<string, string?>
-                {
-                    [P12PasswordEnvVar] = P12Password,
-                },
-            });
-        if (exported.ExitCode != 0)
-        {
-            reason = $"openssl pkcs12 export failed rc={exported.ExitCode}: {exported.StdErr.Trim()}";
-            return null;
-        }
-
         MacSigningSupport.TemporaryKeychain keychain;
         try
         {
-            // 同一个固定假口令：TemporaryKeychain 内部把它落 0600 口令文件再以
-            // openssl -passin file: 解包导入，全程不进 argv。
             keychain = MacSigningSupport.TemporaryKeychain.CreateAsync(
-                workDir, p12Path, P12Password, NullBundleLogger.Instance, CancellationToken.None)
+                workDir, p12Path, password, NullBundleLogger.Instance, CancellationToken.None)
                 .GetAwaiter().GetResult();
         }
         catch (Exception exception)
@@ -338,48 +285,35 @@ public sealed class MacAppGateTests : IClassFixture<MacAppGateFixture>
         }
         var identity = new SigningIdentity(keychain, workDir);
 
-        // 实证探测：自签件签出后 codesign -dv 的 TeamIdentifier 必须取到非 "not set" 值，
-        // 否则门禁的签名身份面在该 runner 上测不了（诚实 Skip 面）。
+        // 实证探测：签出后 codesign -dv 的 TeamIdentifier 必须取到非 "not set" 值——
+        // 门禁只认 Team ID，无 Team 的证书测不到已签分支。
         try
         {
             var probe = MacAppStub.WriteBundle(
                 Path.Combine(workDir, "probe"), "Probe", "com.bundler.gateprobe",
                 machOExecutable: true);
             identity.Sign(probe);
-        }
-        catch (Exception exception)
-        {
-            identity.Dispose();
-            reason = $"self-sign probe failed: {exception.Message}";
-            return null;
-        }
-        // 探针 -dv 同样尽力腿：与 identity.Sign 同款语义——工具拉起失败按不可用计（Skip），不炸测试。
-        string describeStdErr;
-        try
-        {
             var describe = ProcessRunner.Run("/usr/bin/codesign",
-                ["-dv", "--verbose=4", Path.Combine(workDir, "probe", "Probe.app")],
+                ["-dv", "--verbose=4", probe],
                 new ProcessRunner.Options { WorkingDirectory = workDir });
-            describeStdErr = describe.StdErr;
+            var team = Regex.Match(describe.StdErr, "^TeamIdentifier=(.+)$", RegexOptions.Multiline);
+            var teamId = team.Success ? team.Groups[1].Value.Trim() : "";
+            if (teamId.Length == 0 || teamId == "not set")
+            {
+                identity.Dispose();
+                reason = "codesign -dv reports TeamIdentifier=" +
+                    (teamId.Length == 0 ? "<absent>" : "not set") + " for this certificate";
+                return null;
+            }
+            identity.TeamId = teamId;
+            return identity;
         }
         catch (Exception exception)
         {
             identity.Dispose();
-            reason = $"codesign -dv probe failed: {exception.Message}";
+            reason = $"sign probe failed: {exception.Message}";
             return null;
         }
-        var team = Regex.Match(describeStdErr, "^TeamIdentifier=(.+)$", RegexOptions.Multiline);
-        var teamId = team.Success ? team.Groups[1].Value.Trim() : "";
-        if (teamId.Length == 0 || teamId == "not set")
-        {
-            identity.Dispose();
-            reason = "codesign -dv reports TeamIdentifier=" +
-                (teamId.Length == 0 ? "<absent>" : "not set") +
-                " for self-signed certs on this host";
-            return null;
-        }
-        identity.TeamId = teamId;
-        return identity;
     }
 
     // 一个可用签名身份：临时 keychain 句柄 + 证书 CN + 实证 TeamID；Dispose 删件即可（不涉搜索列表）。

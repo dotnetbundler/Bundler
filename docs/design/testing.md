@@ -121,6 +121,7 @@ tests/
 | 行为点 | 层 | 断言 |
 | --- | --- | --- |
 | `BootstrapPlan.Run` 参数面 | Unit | 动词/参数解析、缺参报错、退出码 |
+| `MacAppGate` 签名门禁决策表 | Unit + Integration | 共享表 `tests/Shared/MacAppGateCases.cs`（12 例：同队/跨队/篡改/已签→未签/已签→无 Team/未签→已签/未签→坏签/双无 Team/探测失败/BundleID 不一致×2/双未签）——AOT 腿 Unit `MacAppGateDecisionTests` 经 `MacAppGate.GateTool` 缝注入桩 `codesign`（零子进程）；`sh` 腿 Integration `MacAppGateShTests` 以 PATH 前置桩 `codesign` 真跑 `bundler-updater.sh apply`（macOS 专属，断言 rc 与拒绝时安装目录零变更）；真证书腿 `MacAppGateTests` 读 `BUNDLER_TEST_MAC_SIGNING_P12[_B]`/`…_PASSWORD[_B]`，未提供即 Skip、提供却不可用即失败 |
 | `Apply` 交换语义 | Integration | 提权/非提权目录换装；写失败回滚；`MacAppGate` 剥离 .app 语义；`CanonicalPath`；`ForceManagedCopy`/`IoFaultProbe`/`FreeSpaceProbe` 三缝 |
 | `Program.Main` | Integration | AOT 件与 sh 降级件行为奇偶 |
 | `pkg-apply` 动词 | Unit + Integration | deb/rpm/apk 前端退化链命令选择序与 argv/env 形、`--rollback`（rpm `--oldpackage`）、apk 公钥闸 `--allow-untrusted`、降权链 `setpriv→sudo→runuser→su` 构造、**降权器最小 argv 预检**（`工具 选项 /bin/sh -c :` rc≠0→降级下一级——busybox `setpriv` 在场拒参案，spawn 只证分叉不证收参）、passwd 查名、`--env-file` 回灌+最小集+读毕即删件与 `pkg-*` 暂存目录（目录件/零对件退化判拒、CRLF 折叠、rc4/rc5/rc6 失败出口同删）、`--app` 普通文件判据、`--log` 不可写降级、uid/gid 边界规范化（超界/前导零/坏段回退）、退出码 0/3/4/5/6 分类（含 rc6=安装已提交重启失败）；`CommandProbe`/`EnvProbe`/`ExecProbe`/`SpawnProbe` 四缝（AOT 腿）+ `BUNDLER_UPDATER_CMD_*`/`PASSWD_FILE`/`APK_KEYS_DIR` env 缝（双侧同名，sh 腿实跑 stub 垫片） |

@@ -62,6 +62,7 @@ CI 驱动与 `test` workflow 另有 `test_class`/`-ClassFilter`/第二参数精�
 | 外部工具 | `ExternalTools.Require/Has` | `rpm`/`rpm2cpio`/`cpio`、`desktop-file-validate`、`unsquashfs`、`gpg`、`lintian`/`rpmlint`、`docker`、`clang` 等缺席即跳（NSIS/WiX 工具链随包分发，不经此门禁） |
 | docker | `DockerRunner.IsAvailable` | 发行版矩阵腿需 docker daemon；镜像拉取失败按映射回落备用 registry |
 | fixture | fixture 工程文件存在性 | 载荷缺失即跳（不静默产出假断言） |
+| 真签名证书 | `BUNDLER_TEST_MAC_SIGNING_P12`/`BUNDLER_TEST_MAC_SIGNING_P12_PASSWORD`（跨队腿另需 `_B` 后缀一对） | `MacAppGateTests` 真证书腿：须为带 Team ID 的 `.p12`（Developer ID 等；自签证书 `TeamIdentifier` 恒 `not set` 不可用）；未提供即跳，提供却不可用即失败；口令经 0600 口令文件交 openssl，不进 argv |
 
 交互式 NSIS 向导腿额外要求交互桌面会话（`WindowsDesktop` UIA/Win32 驱动），无桌面即跳。
 

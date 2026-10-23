@@ -63,7 +63,11 @@
 
 - **要做什么**：mac 自更新换包前新旧 `.app` codesign 签名身份一致性腿的实证（防更新通道劫持）。
 - **所需条件**：SA-P-02 的凭证就位后一次验收。
-- **完成证据**：签名应用更新链验证记录；自动化层已覆盖 BundleID 拒换/quarantine 剥离/未签名与自签（含 OU→TeamIdentifier 尽力腿，CI macOS 宿主取不到签名即诚实 Skip），剩余缺口仅真 Apple Developer ID 身份链实证。
+- **执行方式**：取得两张不同 Team 的 Developer ID（或其他带 Team ID）证书后，以 `BUNDLER_TEST_MAC_SIGNING_P12`/`BUNDLER_TEST_MAC_SIGNING_P12_PASSWORD` 及 `_B` 后缀一对注入，在 macOS 宿主跑 `--filter-class "*MacAppGateTests*"`（降级拒/未签→已签放行/跨队拒/篡改拒/同队放行五腿）。
+- **完成证据**：五腿真签名跑绿记录。
+- **自动化现状**：门禁决策逻辑（同队/跨队/篡改/降级/无 Team/探测失败/BundleID 兜底 12 例）已由 Unit `MacAppGateDecisionTests`（AOT）与 Integration `MacAppGateShTests`（`sh`）以桩 `codesign` 常驻覆盖；BundleID 拒换腿真跑。
+  自签证书签出 `TeamIdentifier=not set`（门禁视同未签），测不到已签分支——此前"自签 OU→TeamIdentifier 尽力腿"自 #101 起在全部 CI macOS 宿主均 Skip、从未实跑，已改为真证书腿。
+  剩余缺口：真 Apple 签名链下 `codesign -dv`/`--verify` 实际输出与桩假设一致性的实证。
 
 ### SA-P-08 mac 公证异常路径
 

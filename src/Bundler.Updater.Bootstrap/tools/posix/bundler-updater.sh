@@ -1531,8 +1531,16 @@ case "$PAYLOAD_DIR" in
     *) if [ -f "$PAYLOAD_DIR/Contents/Info.plist" ]; then IS_APP=1; else IS_APP=0; fi ;;
 esac
 if [ "$IS_APP" = 1 ] && [ "$ROLLBACK" != 1 ] && [ "$(uname -s)" = "Darwin" ]; then
-    OLD_TEAM=$(codesign -dv --verbose=4 "$INSTALL_DIR" 2>&1 | sed -n 's/^TeamIdentifier=//p' | head -1)
-    NEW_TEAM=$(codesign -dv --verbose=4 "$PAYLOAD_DIR" 2>&1 | sed -n 's/^TeamIdentifier=//p' | head -1)
+    # codesign 起不来（126 不可执行/127 缺席）≠ 未签——判定器缺席按未签放行等于拆掉
+    # 降级/跨身份判定，fail closed（与 AOT probeFailed 同口径、同 rc=4）。
+    OLD_SIG=$(codesign -dv --verbose=4 "$INSTALL_DIR" 2>&1); OLD_SIG_RC=$?
+    NEW_SIG=$(codesign -dv --verbose=4 "$PAYLOAD_DIR" 2>&1); NEW_SIG_RC=$?
+    case "$OLD_SIG_RC:$NEW_SIG_RC" in
+        126:*|127:*|*:126|*:127)
+            echo "bundler-updater: codesign could not be executed on this host — refusing to evaluate the bundle signing gate." >&2; exit 4 ;;
+    esac
+    OLD_TEAM=$(printf '%s\n' "$OLD_SIG" | sed -n 's/^TeamIdentifier=//p' | head -1)
+    NEW_TEAM=$(printf '%s\n' "$NEW_SIG" | sed -n 's/^TeamIdentifier=//p' | head -1)
     [ "$NEW_TEAM" = "not set" ] && NEW_TEAM=""
     [ "$OLD_TEAM" = "not set" ] && OLD_TEAM=""
     if [ -n "$NEW_TEAM" ]; then
