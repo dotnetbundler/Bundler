@@ -105,7 +105,7 @@ UPDATE 系统包扩展（deb/rpm/alpineapk installer-replay 自更新）B0–B5 
   NSIS 安装器 rc=0xC000013A 与 UbuntuARM runner 失联归 runner 基建瞬断（未复现、无产品面证据）；
   macOS intel 挂死根因为 .NET Unix `Process.Start` spawn/reap 全局锁死锁（dotnet/runtime #135294 同族，10.x 无修复），已以 `NativeSpawnUnix`（libc `posix_spawn`）弃用 Unix `Process` 根治，原理见 `docs/design/architecture.md`。
   残余：`posix_spawn` 内部仍 fork+shim，最深层机况下单次调用可堵，但无共享锁不传染，60s 弃件后进程存活。
-- **引导件冻件口径**：现嵌 8 件为 produce-bootstrap run `39962028724`@`6f899d0` 产出（五平台腿全绿），SHA-256 账留 PR #150 分支提交 `770454c` 消息。
+- **引导件冻件口径**：`main` 现嵌 8 件为 produce-bootstrap run `39962028724`@`6f899d0` 产出（PR #150，SHA-256 账留提交 `770454c` 消息）；分支 `fix/mac-app-gate-evidence` 重冻为 run `39989472655`@`99605d5`（含 `MacAppGate` `GateTool` 缝，生产行为不变）。
   `NativeSpawnUnix`（含建管 `O_CLOEXEC`/`ENOSYS` 平台口径修复）+ musl static-pie `DirectPInvoke` 直绑 + `WorkingDirectory=""` PATH 基准修复 + `EnvironmentIsComplete` 完整环境块全链在冻件内。- **公开 API 破改登记**：`Bundler.Updater` 包面 `UpdateClient.Apply`/`Rollback` 返回类型由 `System.Diagnostics.Process` 换为 `ToolProcess`（快速开发期不背兼容债，见 `docs/design/update.md`）。
 
 ## 4. 外部验收边界（未执行，不视为完成）
