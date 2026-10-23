@@ -43,7 +43,10 @@
 - quarantine 挂载+拷出传播断言实测。
 - 挂载事实日志：`hdiutil attach` 成功后落 Information 级 `Mounted DMG volume at '<挂载点>' from '<image-rw.dmg>'`（MSBuild 侧映射 `MessageImportance.High`，正常发布输出可见）；
   `attach` 未成功绝不落该消息。
-- 挂载后失败清理边界：已挂载且尚未成功卸载时后续失败，catch 尽力 `detach -force`（`TryRun` best-effort，不保证一定成功）；
+- 统一卸载序列：成功路与失败清理路共用同一 detach 序列——先 graceful `detach`，第 3 次尝试起递进 `-force`，至多 5 次带退避重试；
+  每次 detach 成功（或卷已被他方卸下）后以 `hdiutil info` 复核挂载点确已消失才算完成（`diskimages-helper` 簿记有滞后）。
+  成功路穷尽仍未卸下即构建失败；失败清理路穷尽只记警告，不掩盖真实失败。
+- 挂载后失败清理边界：已挂载且尚未成功卸载时后续失败，catch 以非强制档跑上述统一卸载序列（尽力而为，不保证一定成功）；
   管线 `finally` 回收工作目录与临时镜像，失败不留最终伪产物；
   集成腿断言发布输出含挂载事实行（带工作域与 `dmg-mount` 挂载点）且 `hdiutil info` 有界轮询确认无残余挂载。
 - 横切：独立 `Bundler.MacDmg` 包、`BundlerMacDmg*` MSBuild 属性、全链离线、工具探测门槛。

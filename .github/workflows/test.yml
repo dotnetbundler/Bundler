@@ -12,7 +12,7 @@ on:
         default: unit
         options: [unit, api, integration, package, all]
       runners:
-        description: runner 标签子集，逗号分隔不带空格；all=六腿全跑
+        description: runner 标签子集，逗号分隔不带空格；all=六腿全跑；可选预览腿 xcode-27（macOS 27）只能显式点名
         type: string
         default: all
         required: true
@@ -115,11 +115,16 @@ jobs:
         run: |
           set -euo pipefail
           ALL='["ubuntu-26.04","ubuntu-26.04-arm","windows-2025-vs2026","windows-11-vs2026-arm","macos-26-intel","macos-26"]'
+          # 可选预览腿：只经显式 runners 选入，不进 all/verify 发布门。
+          # xcode-27=GitHub 预览镜像（底座 macOS 27，arm64）——pipe2 自 macOS 27 起可用，
+          # 是 NativeSpawnUnix pipe2 原子建管路径唯一的 macOS 覆盖面；正式 macos-27 标签上线后并入 ALL。
+          OPTIONAL='["xcode-27"]'
+          ALLOWED=$(python3 -c 'import json,sys; print(json.dumps(json.loads(sys.argv[1]) + json.loads(sys.argv[2])))' "$ALL" "$OPTIONAL")
           if [ -z "$RUNNERS_IN" ] || [ "$RUNNERS_IN" = "all" ]; then
             echo "runners=$ALL" >> "$GITHUB_OUTPUT"
           else
-            # 逐标签对 ALL 校验并去重——错拼标签会让矩阵腿挂死在不存在 runner 上等不到失败信号。
-            python3 - "$ALL" <<'PY' >> "$GITHUB_OUTPUT"
+            # 逐标签对 ALLOWED 校验并去重——错拼标签会让矩阵腿挂死在不存在 runner 上等不到失败信号。
+            python3 - "$ALLOWED" <<'PY' >> "$GITHUB_OUTPUT"
           import json, os, sys
           allowed = json.loads(sys.argv[1])
           picked = list(dict.fromkeys(x.strip() for x in os.environ["RUNNERS_IN"].split(",") if x.strip()))
@@ -172,6 +177,16 @@ jobs:
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.x"
+
+      # 宿主事实落 job 日志：预览镜像标签不等于 OS 版本，以 sw_vers 实测为准；
+      # pipe2 符号在否决定 NativeSpawnUnix 走原子建管还是 pipe+fcntl 回落。
+      - name: macOS 宿主事实
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          sw_vers
+          uname -m
+          python3 -c 'import ctypes; print("pipe2 exported:", hasattr(ctypes.CDLL(None), "pipe2"))'
 
       # 常驻 MSBuild 节点持任务程序集锁会致后续 pack MSB3027——build 前先关（win 腿实证）。
       - name: 构建

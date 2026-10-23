@@ -62,7 +62,7 @@ tests/
 | `FileTree.CopyTree` | Reject/WarnSkip/Traverse 三策略；Traverse 必须 maxDepth（断言）；符号链接环防；非常规文件跳过；排序稳定；resolveFileDestination 碰撞回调；overwrite 语义；reparse 点拒绝 |
 | `Hashes` | sha256 byte[]/stream/file 三源+sha1 byte[]/stream+md5 byte[]/file（按实际重载面）；lower/upper hex 逐字节正确 |
 | `Gzip`/`TarWriter` | gzip 确定性（同输入同输出）；ustar 头字段（名字/大小/模式/mtime/typeflag/校验和）、长名处理、symlink 项、目录项、结尾块 |
-| `ToolRunner` | RunAsync 经 `Handler` 缝：参数引用、退出码传播、输出捕获、取消传播；`SafeArgs` 密位遮罩纯函数（`-p`/`-k`/`--password`/`--apple-id` 旗标后参与 `=` 右值，`-k` 仅 security 域）；`RunSync` 不经缝（文档化边界）。有界等待面：`BUNDLER_TOOL_TIMEOUT_SECONDS` 默认 15min 到点杀进程树（net10 面）→ `ExitCode=-1`+工具名耗时标记，合法长任务经 `timeout` 形参豁免（notarytool 1h）；进程面为 `ToolProcess`（Unix 走 libc posix_spawn：spawn 专线程 ~1min 级有界弃件、waitpid 轮询退出观察、SETPGROUP 进程组树杀、统一 reaper 收尸——绕开 macOS 实证过的 .NET spawn/reap 全局锁死锁；Windows 包装 Process），排空 5s 有界，孙代持管道不悬停——真 spawn 用例在 Integration（`ToolRunnerIntegrationTests`：挂死子代腿、壳 spawn 孙代腿）与 Unit `ToolProcessTests` |
+| `ToolRunner` | RunAsync 经 `Handler` 缝：参数引用、退出码传播、输出捕获、取消传播；`SafeArgs` 密位遮罩纯函数（`-p`/`-k`/`--password`/`--apple-id` 旗标后参与 `=` 右值，`-k` 仅 security 域）；`RunSync` 不经缝（文档化边界）。有界等待面：`BUNDLER_TOOL_TIMEOUT_SECONDS` 默认 15min 到点杀进程树（net10 面）→ `ExitCode=-1`+工具名耗时标记，合法长任务经 `timeout` 形参豁免（notarytool 1h）；进程面为 `ToolProcess`（Unix 走 libc posix_spawn：spawn 专线程 ~1min 级有界弃件、waitpid 轮询退出观察、SETPGROUP 进程组树杀、统一 reaper 收尸——绕开 macOS 实证过的 .NET spawn/reap 全局锁死锁；Windows 包装 Process），排空 5s 有界，孙代持管道不悬停——真 spawn 用例在 Integration（`ToolRunnerIntegrationTests`：挂死子代腿、壳 spawn 孙代腿）与 Unit `ToolProcessTests`；建管平台口径在 Unit `NativeSpawnUnixTests`（`O_CLOEXEC`/`ENOSYS` 双平台取值纯函数断言、宿主实建管两端 `FD_CLOEXEC` 落位、宿主导出 `pipe2` 即不回落——macOS ≤26 ARM64 回落路径按已登记 fcntl 变参残余 Skip） |
 | `ToolCache` | `ResolveCacheDirectory` 默认根与显式覆盖；`ComputeContentId` 稳定性与序无关性；`ResolveToolPath` 越界拒绝；`ResolveAsync` 全生命周期：段校验/sha 校验/锁/暂存原子落位/清单写读/校验失败重建/陈旧暂存清扫/缓存命中不重写；reparse 点拒绝；`AcquireLockAsync` 有界等待（持锁超 `ProcessTimeout` 报 `TimeoutException`、确定性缺席 1s 宽限后直抛底层 IOException） |
 | `ZipToolCache` | zip 内嵌资源物化：条目归一化、目录项、非法条目、清单契约 |
 | `PayloadSource` | deb/rpm/apk 载荷枚举：输入目录遍历、file entries 覆盖、模式位、目录项、符号链接、binlink |
@@ -169,6 +169,9 @@ HelloBundlerApp：`dotnet build/publish` 链 → 经 buildTransitive 产包 → 
 
 本地 `dotnet pack` → `Bundler.PackageTests` 消费：nupkg 还原来源、buildTransitive 目标注入、`Bundler.MSBuild` 任务程序集就位、各后端包内容清单、`DotNet.Bundler` 元包依赖图与随包文件（README/LICENSE/THIRD-PARTY-NOTICES）；MSI fixture 真装腿保留（localinstall 闸）。
 fixture 还原走 `RestoreWithRetry` 统一面：共享 `RestorePackagesPath` 缓存（`-r win-x64` 签名 runtime packs 下载+验签一次到位）+ `-p:NuGetAudit=false`（砍掉与包无关的固定 HTTP 触点——缓存命中后逼近零公网；NU190x 抑制属测试语境登记取舍，仓库 `TreatWarningsAsErrors` 下 audit 反而会把公告级告警升 error 阻断测试）+ 75s 零输出空闲看门狗（`ProcessRunner.IdleTimeout`——共享 runner 上 NuGet 连接层僵死"Determining projects"后零输出，沉默即换枪，慢速活跃 restore 不受影响；看门狗判沉默不判进展，慢速大下载的静默窗口仍可能被换枪，登记取舍）+ 3min 墙钟上限 + 至多 6 次 attempt 有界重试；尝试级取证经 `BUNDLER_RESTORE_TRACE` 置位落 `restore-progress.log`（BEGIN/SPAWN/EXIT/TIMEOUT/RETRY，不记 argv/env）。
+CI 环境统一设 `NUGET_CERT_REVOCATION_MODE=offline`（`test.yml` 测试腿 env、`verify.yml` 顶层 env、`produce-bootstrap.yml` 产件腿各放一处——`workflow_call` 不穿透 env）。
+依据：Windows 独有的签名包 CRL/OCSP 吊销检查走 HTTP/80，windows-arm runner 出口不可达即挂，这是已证实的 MSI 类 restore 超时根因（NuGet/Home#11548/#13659 同款）。
+MSI 类 fixture 还原缓存收敛为类级共享缓存，只有空源必败腿保留独立缓存。
 
 ## 4. CI 拓扑（全新）
 
@@ -177,6 +180,9 @@ fixture 还原走 `RestoreWithRetry` 统一面：共享 `RestorePackagesPath` �
   test.yml       测试矩阵唯一定义：workflow_dispatch(suite×runners) + workflow_call
                  legs: ubuntu-26.04 / ubuntu-26.04-arm / windows-2025-vs2026 /
                        windows-11-vs2026-arm / macos-26-intel / macos-26
+                 可选预览腿: xcode-27（macOS 27 arm64，只经 runners 显式点名，
+                       不进 all/verify；pipe2 原子建管路径的唯一 macOS 覆盖面）
+                 macOS 腿首步落 sw_vers + pipe2 符号在否（宿主事实以实测为准）
                  每腿: build → run-tests 驱动（四工程直跑 dll + 逐类进度日志）
                       → `ci-logs-<os>` 工件（progress/snapshots/trace，always() 上传）
   verify.yml     发布门：workflow_dispatch
