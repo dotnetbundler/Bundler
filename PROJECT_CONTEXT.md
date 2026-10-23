@@ -100,6 +100,12 @@ UPDATE 系统包扩展（deb/rpm/alpineapk installer-replay 自更新）B0–B5 
   该腿此前于 verify `39368446045` 以 120s 窗口失败过一次并于 PR #148 放宽至 300s，本次 300s 仍未达——窗口内快照可见 `smartscreen.exe`，但快照白名单不含安装器进程，根因未证实；
   与本修复无关（Windows 不走 `NativeSpawnUnix`，NSIS 安装链不经 updater 引导件），首次失败现场存本机诊断目录；按失败留痕 `rerun --failed` 复跑。
   attempt 2 全绿 47/47（六宿主测试、produce/consume/manual/universal、`syspkg-verify` deb/rpm/apk 三容器——重冻 musl 引导件真装/更新/回滚通过）。
+- **`.app` 签名门禁证据分支**（`fix/mac-app-gate-evidence@dde8a20`，alpha.111）：
+  本机 macOS 27：Unit 1647 / 失败 4（均为已登记 provenance 环境的 `ArchiveTests`）；门禁/引导件一致性/更新链集成 104 / 0 失败；
+  AOT 决策表 12/12、`sh` 决策表 12/12；反向变异——去掉 AOT fail-closed 与跨队比较各命中 `ProbeFails`/`CrossTeam`，`sh` 换回 `main` 旧脚本命中 `ProbeFails`（实证旧 `sh` fail-open）；
+  真证书腿未提供证书即 Skip、提供无效证书即失败（实测）。
+  CI `xcode-27` suite=all run `39989905023`：Unit 1647/0 失败、Api 84/0、Integration 336/0（`MacAppGateShTests` 12/12 实跑零 Skip）、Package 19/0。
+  verify run `39989916906` attempt 1 全绿 47/47（含 Linux dash 与 syspkg 三容器）。
 - **CI 故障归属结论**（仍有效）：
   MSI 类 restore 超时根因已证实并根治（签名包吊销检查走 HTTP/80，处置见 `docs/design/testing.md` §3.11），修复后 windows-arm 腿零 restore 超时；
   NSIS 安装器 rc=0xC000013A 与 UbuntuARM runner 失联归 runner 基建瞬断（未复现、无产品面证据）；
