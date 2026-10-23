@@ -1,13 +1,11 @@
 # DotNet.Bundler 项目上下文
 
 > 最后更新：2026-10-23
-> 当前基线：`main@94a1d3b`。
-> 代码基线为 `9999e6e`，`94a1d3b` 只改本文。
+> 当前基线：`main@94a1d3b`（代码基线 `9999e6e`，`94a1d3b` 只改本文）。
 > 全功能面体检收口的 PR #142、#144–#149 均已 squash 合入 `main`；`9999e6e` 代码树与 verify 验证头 `dd64c9a` 逐文件零差异。
-> 当前包版本：`0.1.0-alpha.109`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）。
-> 当前阶段：**无进行中阶段**。
+> 进行中：缺陷修复分支 `fix/macos27-pipe2`（macOS 27 上 Unix 子进程管道创建失败，见 §5），待 PR 评审与用户授权合入 `main`。
+> 当前包版本：`0.1.0-alpha.110`（修复分支；`main` 仍为 `0.1.0-alpha.109`）。
 > 全部 11 个格式、CLI 与 UPDATE 均已冻结（冻结指功能面不扩展，缺陷修复照走），全功能面体检收口已完成。
-> 已知未修缺陷：macOS 27 宿主上 Unix 子进程管道创建失败（见 §5），修复待用户授权。
 > 目标模型已定型——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `{os}[-{libc}]-{arch}` canonical 词，契约与全产物名目录见 `docs/design/targets.md`。
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
@@ -81,24 +79,35 @@ UPDATE 系统包扩展（deb/rpm/alpineapk installer-replay 自更新）B0–B5 
 - **CI 发布门**：verify 终头 `dd64c9a` 五连全绿（`39653183541`/`39661978487`/`39670560817`/`39683074173`/`39690254249`，各 47/47 jobs success）。
   合入后 `main@94a1d3b`（代码同 `9999e6e`）verify 两连全绿（`39702694685`/`39775564388`，各 47/47 jobs success）。
   produce-bootstrap 终头五平台腿全绿（`39645817903` 等）。
-  CI 覆盖的 macOS 宿主只有 `macos-26` 与 `macos-26-intel`，未覆盖 macOS 27。
+  `verify` 六宿主矩阵的 macOS 宿主为 `macos-26` 与 `macos-26-intel`；macOS 27 由 `test.yml` 可选预览腿 `xcode-27` 覆盖（只经显式点名，不进 verify）。
 - **本机 Windows**（收口 PR #149 头 `9e2d93e`，Windows x64，.NET SDK 10.0.302）：
   Release build rc 0（0 警告 0 错误）；
   Unit 1598 全绿；
   `ToolingDiagnosticsIntegrationTests` 6/6（含 75s 空闲看门狗与六 attempt 重试语义腿）。
-- **本机 macOS 27**（2026-10-23，`main@94a1d3b`，macOS 27.0.1 arm64，.NET SDK 10.0.402）：
-  `dotnet build Bundler.slnx -c Release` rc 0（0 警告 0 错误）；
-  `dotnet test tests/Unit/Bundler.UnitTests.csproj -c Release --no-build` rc 2（总 1629 / 通过 1589 / 跳过 23 / 失败 17）；
-  17 个失败均为 `Win32Exception: pipe/fcntl failed.`，根因见 §5；
-  未跑 Api/Integration/Package。
+- **本机 macOS 27**（2026-10-23，macOS 27.0.1 arm64，.NET SDK 10.0.402，Claude 桌面 App 拉起的 shell：C locale、新建文件带 `com.apple.provenance`）：
+  修复前 `main@94a1d3b`：Unit 总 1629 / 失败 17（均为 `pipe/fcntl failed.`）；旧 `macos-aarch64` 冻件 `.app` apply rc=4。
+  修复分支 `fix/macos27-pipe2@770454c`：Release build rc 0（0 警告 0 错误）；
+  Unit 总 1635 / 通过 1608 / 跳过 23 / 失败 4——4 个均为 `ArchiveTests`，系本机 provenance 环境所致（见 §5），在 `main` 基线同环境下 `Detects_ExtendedAttributes_OnPayload` 同样失败；
+  Api 在 `LANG=en_US.UTF-8` 下总 84 / 失败 2（`ArchiveApiTests` 同属 provenance）；C locale 下另有 5 个 NSIS 腿因 `makensis` "Bad text encoding" 失败（见 §5）；
+  Integration（`LANG=en_US.UTF-8`，未开本地安装同意闸）macOS/UPDATE 八类首跑总 135 / 失败 3：`.app` 端到端更新 rc=4（旧冻件，重冻后通过）、`EulaAndAdHocSignedVariant` `udifderez` EAGAIN(35)（单跑复跑通过，已登记 `diskimages-helper` 瞬态）、`FinderSlaAcceptanceMountsVolume` 90s 未见 Agree 按钮（本机会话无 GUI 辅助功能授权）；
+  重冻后 `UpdateClientChainTests`/`UpdaterBootstrapParityTests`/`MacAppGateTests`/`UpdateIntegrationTests` 总 92 / 失败 0 / 跳过 28（含自签身份导入临时钥匙串后识别不到而 Skip 的 `MacAppGateTests` 腿）；
+  新冻件 `macos-aarch64`/`macos-universal` `.app` apply rc=0 换包生效，`macos-x86_64` 本机无 Rosetta 未跑。
+- **CI macOS 27**（`xcode-27` 预览镜像实测 macOS 27.0.1 26A434 arm64、导出 `pipe2`）：
+  `test` run `39962038778`@`6f899d0` suite=unit：总 1635 / 失败 0 / 跳过 23。
+  `test` run `39962825289`@`770454c` suite=all（含重冻引导件）：Unit 1635/0 失败/23 跳过、Api 84/0/35、Integration 324/0/168、Package 19/0/10。
+- **verify 修复分支**（run `39962835463`@`770454c`）：
+  attempt 1 失败——`windows-2025-vs2026` 测试腿 `NsisIntegrationTests.InterruptedInstallManifestMismatchAndTamperRejections` 300s 未见中断装置钩位标记（"did not reach its post-install hook"），其余测试腿通过、下游未执行；
+  该腿此前于 verify `39368446045` 以 120s 窗口失败过一次并于 PR #148 放宽至 300s，本次 300s 仍未达——窗口内快照可见 `smartscreen.exe`，但快照白名单不含安装器进程，根因未证实；
+  与本修复无关（Windows 不走 `NativeSpawnUnix`，NSIS 安装链不经 updater 引导件），首次失败现场存本机诊断目录；按失败留痕 `rerun --failed` 复跑。
+  attempt 2 全绿 47/47（六宿主测试、produce/consume/manual/universal、`syspkg-verify` deb/rpm/apk 三容器——重冻 musl 引导件真装/更新/回滚通过）。
 - **CI 故障归属结论**（仍有效）：
   MSI 类 restore 超时根因已证实并根治（签名包吊销检查走 HTTP/80，处置见 `docs/design/testing.md` §3.11），修复后 windows-arm 腿零 restore 超时；
   NSIS 安装器 rc=0xC000013A 与 UbuntuARM runner 失联归 runner 基建瞬断（未复现、无产品面证据）；
   macOS intel 挂死根因为 .NET Unix `Process.Start` spawn/reap 全局锁死锁（dotnet/runtime #135294 同族，10.x 无修复），已以 `NativeSpawnUnix`（libc `posix_spawn`）弃用 Unix `Process` 根治，原理见 `docs/design/architecture.md`。
   残余：`posix_spawn` 内部仍 fork+shim，最深层机况下单次调用可堵，但无共享锁不传染，60s 弃件后进程存活。
-- **引导件冻件口径**：现嵌 8 件为 produce-bootstrap run `39341833602`@`0beb70a` 产出。
-  `NativeSpawnUnix` + musl static-pie `DirectPInvoke` 直绑 + `WorkingDirectory=""` PATH 基准修复 + `EnvironmentIsComplete` 完整环境块全链在冻件内（产线 alpine 容器冒烟与本机直跑 apply 双实证）；
-  SHA-256 账留 PR #148 处置记录评论。
+- **引导件冻件口径**：修复分支现嵌 8 件为 produce-bootstrap run `39962028724`@`6f899d0` 产出（五平台腿全绿），SHA-256 账留提交 `770454c` 消息。
+  `NativeSpawnUnix`（含建管 `O_CLOEXEC`/`ENOSYS` 平台口径修复）+ musl static-pie `DirectPInvoke` 直绑 + `WorkingDirectory=""` PATH 基准修复 + `EnvironmentIsComplete` 完整环境块全链在冻件内。
+  `main` 仍为 run `39341833602`@`0beb70a` 旧冻件（macOS 27 上 `.app` apply fail-closed rc=4）。
 - **公开 API 破改登记**：`Bundler.Updater` 包面 `UpdateClient.Apply`/`Rollback` 返回类型由 `System.Diagnostics.Process` 换为 `ToolProcess`（快速开发期不背兼容债，见 `docs/design/update.md`）。
 
 ## 4. 外部验收边界（未执行，不视为完成）
@@ -108,15 +117,33 @@ UPDATE 系统包扩展（deb/rpm/alpineapk installer-replay 自更新）B0–B5 
 
 ## 5. 未决问题（等待用户或外部输入）
 
-- **macOS 27 管道创建缺陷**（已证实，未修复，修复待用户授权）：
-  `src/Bundler.Core/NativeSpawnUnix.cs` 建管优先调 `pipe2(fds, O_CLOEXEC)`，`O_CLOEXEC` 写死为 Linux 值 `0x80000`；
-  只在符号缺席或 `ENOSYS` 时回落 `pipe+fcntl`。
-  macOS 26 及更早没有 `pipe2`，始终走回落路径，所以 CI 一直通过。
-  macOS 27 SDK 头文件标注 `pipe2` 自 `macos(27.0)` 起可用，而 Darwin 的 `O_CLOEXEC` 为 `0x1000000`；
-  `pipe2(0x80000)` 返回 `EINVAL`，被当作真实失败抛 `pipe/fcntl failed.`。
-  本机实证：C 探针 `pipe2(0x80000)` 得 -1/EINVAL、`pipe2(O_CLOEXEC)` 得 0；Unit 中 `ToolProcessTests` 8 个、`AppImageTests` 9 个因此失败。
-  推断影响面（未逐项实测）：macOS 27 上 Core 经 `ToolProcess` 的带重定向工具调用（`.app`/`.dmg`/`.pkg` 后端的 Apple 工具链）、应用内 `Bundler.Updater`，以及同源编译进该常量的 macOS 引导件冻件。
-  修复须补 macOS 27 验证腿（CI 有对应 runner 时）。
+- **macOS 27 管道创建缺陷**（已在 `fix/macos27-pipe2` 修复，待合入 `main`）：
+  根因：`NativeSpawnUnix` 建管优先调 `pipe2(fds, O_CLOEXEC)`，`O_CLOEXEC` 写死 Linux 值 `0x80000`（Darwin 为 `0x1000000`），`ENOSYS` 也写死 Linux 值 38（Darwin 为 78）；
+  macOS ≤26 无 `pipe2` 始终回落 `pipe+fcntl`，故 CI 一直通过；macOS 27 起 `pipe2` 可用（SDK 标 `macos(27.0)`），误传旗标得 `EINVAL`，被当真实失败抛 `pipe/fcntl failed.`。
+  实测影响：Core 带重定向工具调用全失败；冻件引导件 `MacAppGate` 判不出签名态 fail-closed，`.app` 自更新 rc=4。
+  修复：两常量分平台取值、`EINVAL` 同按缺席回落；新增 `NativeSpawnUnixTests`（反向变异验证：Darwin 旗标改回 Linux 值即 3 例失败）；重冻 8 件引导件；`test.yml` 增 `xcode-27` 可选预览腿。
+  包未公开发布，无外部用户受影响。
+- **macOS ≤26 ARM64 回落路径 `FD_CLOEXEC` 不落位**（既有已登记残余，本轮实测确认，未处置）：
+  Apple ARM64 变参 ABI 下 `DllImport fcntl(int,int,int)` 第三参递不到，回落路径管端不带 `FD_CLOEXEC`；
+  本进程经 `NativeSpawnUnix` 拉起的子件由 `POSIX_SPAWN_CLOEXEC_DEFAULT` 兜底，宿主进程其他代码（如嵌入 `Bundler.Updater` 的应用自行 spawn）拉起的子件可继承管端。
+  macOS 27+ 走 `pipe2` 原子路径不受影响；可选处置为 Apple ARM64 专用 `fcntl` 签名（以 6 个占位参数填满 x2–x7 使第 9 参落栈），待用户裁决。
+- **Archive 遇 `com.apple.provenance` 改走宿主工具**（本轮发现，未处置，涉产品语义待用户裁决）：
+  macOS 对从下载来源 App（如 IDE、Claude 桌面 App）拉起的进程所建文件自动加 `com.apple.provenance`；
+  `MacArchiveTools` 只要载荷有任何 xattr 即改走宿主 `ditto`/`tar` 保留 xattr，产物失去确定性、symlink 表示随之改变。
+  本机 4 个 `ArchiveTests` 与 2 个 `ArchiveApiTests` 因此失败；CI runner 无该属性故不暴露。
+  待裁决：是否把 `com.apple.provenance`（及同类系统管理属性）排除在 xattr 判定之外。
+- **macOS 27 上自签签名身份腿全 Skip**（本轮发现，未处置）：
+  `MacAppGateTests` 5 条自签身份腿在本机与 CI `xcode-27` 上均因 `.p12` 导入临时钥匙串后 `find-identity` 识别 0 个有效身份而按设计 Skip；
+  这些腿在 `macos-26`/`macos-26-intel` 上仍覆盖，macOS 27 上签名门禁的同队/跨队/篡改判定暂无自动化证据；根因（macOS 27 钥匙串行为或测试证书生成口径）未查。
+- **NSIS 中断装钩位等待超时复发**（既有偶发，未处置）：
+  `NsisIntegrationTests.InterruptedInstallManifestMismatchAndTamperRejections` 在 windows-2025 腿两次未见钩位标记（`39368446045` 120s 窗口、`39962835463` attempt 1 的 300s 窗口），复跑均通过；
+  300s 仍未达说明不只是负载慢，疑似安装器被拦截或挂起（窗口内见 `smartscreen.exe`，未证实）；
+  取证缺口：进程快照白名单不含被测安装器进程。
+  可选处置为把被测安装器纳入快照白名单或超时时落安装器进程树与 NSIS 日志，待用户裁决；不放宽断言。
+- **NSIS 在 C locale 宿主打包失败**（本轮发现，未处置）：
+  POSIX `makensis` 即使传 `-INPUTCHARSET UTF8`，在 C/POSIX locale 下遇非 ASCII 脚本仍报 "Bad text encoding"；
+  本机 C locale 下 5 个 `NsisApiTests` 失败，`LANG=en_US.UTF-8` 下通过；Docker 容器默认 C locale，Linux/macOS 宿主交叉打 NSIS 的用户可能触发。
+  可选处置为后端给 `makensis` 子进程注入 UTF-8 locale，待用户裁决。
 - 各格式外部事项等待对应环境输入，统一登记在 `docs/project/special-acceptance.md`。
 - 仓外独立包消费 fixture（`tests/Fixtures/MsiPackage/`）的 `Fixture` 与 `Standalone/` 在仓内改项目引用后仍保留 `PackageReference`+`Bundler.LocalPackages.props`，
   作为已发布 nupkg 的还原来源、buildTransitive 注入与任务程序集进包契约的验收腿；
@@ -127,10 +154,12 @@ UPDATE 系统包扩展（deb/rpm/alpineapk installer-replay 自更新）B0–B5 
 
 ## 6. 默认下一步
 
-全部格式、CLI 与 UPDATE 均已冻结并入 `main`，全功能面体检收口已完成，当前无进行中阶段。
-候选工作（均需用户授权后启动）：
+全部格式、CLI 与 UPDATE 均已冻结并入 `main`，全功能面体检收口已完成。
+进行中：`fix/macos27-pipe2` CI 验证已全部通过（`xcode-27` 全套件、verify 47/47 含 syspkg），已开 PR 待评审，合入 `main` 须用户授权。
+其后候选工作（均需用户授权后启动）：
 
-- 修复 macOS 27 管道创建缺陷（§5）；
+- §5 本轮新发现各项（ARM64 回落 `FD_CLOEXEC`、Archive provenance、macOS 27 自签身份腿 Skip、NSIS 中断装钩位超时、NSIS C locale）的处置裁决；
+- 正式 `macos-27` runner 标签上线后把 macOS 27 并入 verify 六宿主矩阵；
 - 外部待验收项（统一登记在 `docs/project/special-acceptance.md`）；
 - 发布链资产实际推送（NuGet/Release 为另一步，仍需用户明确许可）；
 - `docs/project/roadmap.md` §4.2 候选增强队列当前为空，新增强按候选标准登记。
