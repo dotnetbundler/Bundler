@@ -169,6 +169,9 @@ HelloBundlerApp：`dotnet build/publish` 链 → 经 buildTransitive 产包 → 
 
 本地 `dotnet pack` → `Bundler.PackageTests` 消费：nupkg 还原来源、buildTransitive 目标注入、`Bundler.MSBuild` 任务程序集就位、各后端包内容清单、`DotNet.Bundler` 元包依赖图与随包文件（README/LICENSE/THIRD-PARTY-NOTICES）；MSI fixture 真装腿保留（localinstall 闸）。
 fixture 还原走 `RestoreWithRetry` 统一面：共享 `RestorePackagesPath` 缓存（`-r win-x64` 签名 runtime packs 下载+验签一次到位）+ `-p:NuGetAudit=false`（砍掉与包无关的固定 HTTP 触点——缓存命中后逼近零公网；NU190x 抑制属测试语境登记取舍，仓库 `TreatWarningsAsErrors` 下 audit 反而会把公告级告警升 error 阻断测试）+ 75s 零输出空闲看门狗（`ProcessRunner.IdleTimeout`——共享 runner 上 NuGet 连接层僵死"Determining projects"后零输出，沉默即换枪，慢速活跃 restore 不受影响；看门狗判沉默不判进展，慢速大下载的静默窗口仍可能被换枪，登记取舍）+ 3min 墙钟上限 + 至多 6 次 attempt 有界重试；尝试级取证经 `BUNDLER_RESTORE_TRACE` 置位落 `restore-progress.log`（BEGIN/SPAWN/EXIT/TIMEOUT/RETRY，不记 argv/env）。
+CI 环境统一设 `NUGET_CERT_REVOCATION_MODE=offline`（`test.yml` 测试腿 env、`verify.yml` 顶层 env、`produce-bootstrap.yml` 产件腿各放一处——`workflow_call` 不穿透 env）。
+依据：Windows 独有的签名包 CRL/OCSP 吊销检查走 HTTP/80，windows-arm runner 出口不可达即挂，这是已证实的 MSI 类 restore 超时根因（NuGet/Home#11548/#13659 同款）。
+MSI 类 fixture 还原缓存收敛为类级共享缓存，只有空源必败腿保留独立缓存。
 
 ## 4. CI 拓扑（全新）
 
