@@ -574,7 +574,10 @@ internal static class NativeSpawnUnix
         return true;
     }
 
-    private const int ENOSYS = 38;
+    // ENOSYS 分平台取值：Linux=38、Darwin=78——与真实 errno 比较时写死
+    // Linux 值会让 Darwin 的"不支持"漏判成真实失败。
+    private static readonly int ENOSYS = EnosysFor(s_darwin);
+    internal static int EnosysFor(bool darwin) => darwin ? 78 : 38;
     private const int EIO = 5;
     private static readonly object s_workDirLock = new();
 
@@ -749,10 +752,16 @@ internal static class NativeSpawnUnix
 
     // pipe2(O_CLOEXEC) 原子建管——消灭 pipe→fcntl 之间"并发 spawn 可能继承
     // 未收口 fd"的竞态窗（排水管写端漏进无关子件→ReadToEnd EOF 永不至的
-    // 实测病理）。macOS/旧内核无 pipe2 落 pipe+fcntl，微窗按残余登记。
-    private const int O_CLOEXEC = 0x80000;
+    // 实测病理）。Darwin 自 macOS 27 起提供 pipe2（SDK 标 macos(27.0)），
+    // 更早版本/旧内核无 pipe2 落 pipe+fcntl，微窗按残余登记。
+    // O_CLOEXEC 分平台取值：Linux=0x80000、Darwin=0x1000000——macOS 27 上
+    // 误传 Linux 值得 EINVAL，曾致全部重定向 spawn 失败。
+    private static readonly int O_CLOEXEC = CloExecOpenFlagFor(s_darwin);
+    internal static int CloExecOpenFlagFor(bool darwin) => darwin ? 0x1000000 : 0x80000;
+    private const int EINVAL = 22;
     private static int s_pipe2Absent; // 0=未探 1=缺席——探测失败一次即记住，不再每 spawn 抛探测异常
-    private static bool CreatePipe(int[] fds)
+    internal static bool Pipe2Absent => Volatile.Read(ref s_pipe2Absent) == 1;
+    internal static bool CreatePipe(int[] fds)
     {
         if (Volatile.Read(ref s_pipe2Absent) == 0)
         {
@@ -762,7 +771,10 @@ internal static class NativeSpawnUnix
                 {
                     return true;
                 }
-                if (Marshal.GetLastWin32Error() != ENOSYS)
+                var err = Marshal.GetLastWin32Error();
+                // EINVAL 同按缺席回落：pipe2 只因旗标非法报 EINVAL——宁可退回
+                // pipe+fcntl，也不让旗标口径偏差把全部 spawn 判死。
+                if (err != ENOSYS && err != EINVAL)
                 {
                     return false; // 真实失败（EMFILE 等）——errno 透传给 PipeFailure
                 }
@@ -771,7 +783,7 @@ internal static class NativeSpawnUnix
             catch (DllNotFoundException) { }
             Volatile.Write(ref s_pipe2Absent, 1);
         }
-        // ENOSYS/无该符号 → pipe+fcntl 兜底（macOS 微窗按残余登记）
+        // ENOSYS/EINVAL/无该符号 → pipe+fcntl 兜底（微窗按残余登记）
         return pipe(fds) == 0 && CloExec(fds);
     }
 
