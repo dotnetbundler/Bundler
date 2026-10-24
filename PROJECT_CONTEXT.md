@@ -1,7 +1,7 @@
 # DotNet.Bundler 项目上下文
 
 > 最后更新：2026-10-24
-> 当前基线：`main@96e2186`——`.app` 签名门禁证据 PR #151 已 squash 合入，合并树与 PR 头 `88f9b47` 逐文件零差异（同树 `5dd6edb`；CI 验证头 `dde8a20`，其后只改本文）。
+> 当前基线：`main@5b0bf40`——停止开发收尾 PR #152 已 squash 合入（合并树与 PR 头 `79b434a` 同树 `c43b72e`）；代码与 `96e2186`（`.app` 签名门禁证据 PR #151，CI 验证头 `dde8a20`）相同，其后只改文档与版本号。
 > 此前 macOS 27 管道创建缺陷修复 PR #150（`fc3b6d2`）、全功能面体检收口 PR #142、#144–#149 均已 squash 合入。
 > 当前阶段：**项目已停止开发，转为参考资料**（2026-10-24 用户决定）——不再开发新功能、不修复已知缺陷、不发布 NuGet 包；后继项目将在 GitHub 组织内分多个仓库重新实现，本仓提供参考，见 `docs/project/reference-notes.md` 与 §5。
 > 当前包版本：`0.1.0-alpha.112`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；alpha.112 仅随包 README 加停止开发声明，代码与 alpha.111 相同；不发布）。
