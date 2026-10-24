@@ -1,11 +1,11 @@
 # DotNet.Bundler 项目上下文
 
-> 最后更新：2026-10-23
+> 最后更新：2026-10-24
 > 当前基线：`main@96e2186`——`.app` 签名门禁证据 PR #151 已 squash 合入，合并树与 PR 头 `88f9b47` 逐文件零差异（同树 `5dd6edb`；CI 验证头 `dde8a20`，其后只改本文）。
 > 此前 macOS 27 管道创建缺陷修复 PR #150（`fc3b6d2`）、全功能面体检收口 PR #142、#144–#149 均已 squash 合入。
-> 当前阶段：**无进行中阶段**。
-> 当前包版本：`0.1.0-alpha.111`（根 `Directory.Build.props` 的 `BundlerPackageVersion`）。
-> 全部 11 个格式、CLI 与 UPDATE 均已冻结（冻结指功能面不扩展，缺陷修复照走），全功能面体检收口已完成。
+> 当前阶段：**项目已停止开发，转为参考资料**（2026-10-24 用户决定）——不再开发新功能、不修复已知缺陷、不发布 NuGet 包；后继项目将在 GitHub 组织内分多个仓库重新实现，本仓提供参考，见 `docs/project/reference-notes.md` 与 §5。
+> 当前包版本：`0.1.0-alpha.112`（根 `Directory.Build.props` 的 `BundlerPackageVersion`；alpha.112 仅随包 README 加停止开发声明，代码与 alpha.111 相同；不发布）。
+> 全部 11 个格式、CLI 与 UPDATE 均已冻结（冻结指功能面不扩展），全功能面体检收口已完成。
 > 目标模型已定型——`TargetOperatingSystem{Windows,MacOS,Linux}` + `LibC` 旁维度 + `{os}[-{libc}]-{arch}` canonical 词，契约与全产物名目录见 `docs/design/targets.md`。
 >
 > 本文只保存**当前事实**：版本、阶段、结构、最近验证摘要、未决问题、下一步。
@@ -119,53 +119,47 @@ UPDATE 系统包扩展（deb/rpm/alpineapk installer-replay 自更新）B0–B5 
 只能人工/外部付费完成的验收统一登记在 `docs/project/special-acceptance.md`，**不得宣称已完成**；
 覆盖：生产 Authenticode/Apple 证书与公证、真实 UAC/重启/锁定文件、干净宿主矩阵、母语审校、真实 GUI 交互、公网/真机腿等。
 
-## 5. 未决问题（等待用户或外部输入）
+## 5. 已知缺陷与未决问题（项目停止开发，均不再处置）
 
-- **macOS 27 管道创建缺陷**（已修复，PR #150 合入 `fc3b6d2`；留此作根因记录，下轮对账可移除）：
-  根因：`NativeSpawnUnix` 建管优先调 `pipe2(fds, O_CLOEXEC)`，`O_CLOEXEC` 写死 Linux 值 `0x80000`（Darwin 为 `0x1000000`），`ENOSYS` 也写死 Linux 值 38（Darwin 为 78）；
-  macOS ≤26 无 `pipe2` 始终回落 `pipe+fcntl`，故 CI 一直通过；macOS 27 起 `pipe2` 可用（SDK 标 `macos(27.0)`），误传旗标得 `EINVAL`，被当真实失败抛 `pipe/fcntl failed.`。
-  实测影响：Core 带重定向工具调用全失败；冻件引导件 `MacAppGate` 判不出签名态 fail-closed，`.app` 自更新 rc=4。
-  修复：两常量分平台取值、`EINVAL` 同按缺席回落；新增 `NativeSpawnUnixTests`（反向变异验证：Darwin 旗标改回 Linux 值即 3 例失败）；重冻 8 件引导件；`test.yml` 增 `xcode-27` 可选预览腿。
-  包未公开发布，无外部用户受影响。
-- **macOS ≤26 ARM64 回落路径 `FD_CLOEXEC` 不落位**（既有已登记残余，本轮实测确认，未处置）：
-  Apple ARM64 变参 ABI 下 `DllImport fcntl(int,int,int)` 第三参递不到，回落路径管端不带 `FD_CLOEXEC`；
-  本进程经 `NativeSpawnUnix` 拉起的子件由 `POSIX_SPAWN_CLOEXEC_DEFAULT` 兜底，宿主进程其他代码（如嵌入 `Bundler.Updater` 的应用自行 spawn）拉起的子件可继承管端。
-  macOS 27+ 走 `pipe2` 原子路径不受影响；可选处置为 Apple ARM64 专用 `fcntl` 签名（以 6 个占位参数填满 x2–x7 使第 9 参落栈），待用户裁决。
-- **Archive 遇 `com.apple.provenance` 改走宿主工具**（本轮发现，未处置，涉产品语义待用户裁决）：
-  macOS 对从下载来源 App（如 IDE、Claude 桌面 App）拉起的进程所建文件自动加 `com.apple.provenance`；
-  `MacArchiveTools` 只要载荷有任何 xattr 即改走宿主 `ditto`/`tar` 保留 xattr，产物失去确定性、symlink 表示随之改变。
-  本机 4 个 `ArchiveTests` 与 2 个 `ArchiveApiTests` 因此失败；CI runner 无该属性故不暴露。
-  待裁决：是否把 `com.apple.provenance`（及同类系统管理属性）排除在 xattr 判定之外。
-- **`.app` 签名门禁已签分支无自动化证据**（已处置，PR #151 合入 `96e2186`；留此作根因记录，下轮对账可移除；真 Developer ID 链仍归 SA-P-07）：
-  更正：此前记为"仅 macOS 27 Skip、macos-26 仍覆盖"有误——`MacAppGateTests` 5 条自签身份腿自 #101 起在 macos-26/macos-26-intel/xcode-27 全部 Skip，从未实跑。
-  根因：自签证书 `CSSMERR_TP_NOT_TRUSTED` 被 `find-identity -v` 排除；即便绕过，自签签出 `TeamIdentifier=not set`，门禁视同未签，已签分支（同队/跨队/篡改/降级）在自签下不可达。
-  另：POSIX `sh` 门禁 `codesign` 不可执行时拿空 Team 按未签放行（fail-open），与 AOT fail-closed 不一致。
-  处置：`MacAppGate` 增 `GateTool` 缝 + 共享决策表 12 例（AOT Unit / `sh` Integration）；`sh` 改 126/127 fail-closed；真证书腿改读 `BUNDLER_TEST_MAC_SIGNING_P12[_B]`；`update.md`/SA-P-07 措辞更正。
-- **NSIS 中断装钩位等待超时复发**（既有偶发，未处置）：
-  `NsisIntegrationTests.InterruptedInstallManifestMismatchAndTamperRejections` 在 windows-2025 腿两次未见钩位标记（`39368446045` 120s 窗口、`39962835463` attempt 1 的 300s 窗口），复跑均通过；
-  300s 仍未达说明不只是负载慢，疑似安装器被拦截或挂起（窗口内见 `smartscreen.exe`，未证实）；
-  取证缺口：进程快照白名单不含被测安装器进程。
-  可选处置为把被测安装器纳入快照白名单或超时时落安装器进程树与 NSIS 日志，待用户裁决；不放宽断言。
-- **NSIS 在 C locale 宿主打包失败**（本轮发现，未处置）：
-  POSIX `makensis` 即使传 `-INPUTCHARSET UTF8`，在 C/POSIX locale 下遇非 ASCII 脚本仍报 "Bad text encoding"；
-  本机 C locale 下 5 个 `NsisApiTests` 失败，`LANG=en_US.UTF-8` 下通过；Docker 容器默认 C locale，Linux/macOS 宿主交叉打 NSIS 的用户可能触发。
-  可选处置为后端给 `makensis` 子进程注入 UTF-8 locale，待用户裁决。
-- 各格式外部事项等待对应环境输入，统一登记在 `docs/project/special-acceptance.md`。
+项目已转为参考资料（见文首），下列问题只记录、不修复；后继项目复用相关设计前应先读对应条目。
+已修复问题的经验（macOS 27 `pipe2`、签名门禁证据缺口等）收录在 `docs/project/reference-notes.md`。
+
+- **K1 Archive 遇 `com.apple.provenance` 改走宿主工具**：
+  位置：`src/Bundler.Archive/MacArchiveTools.cs`（`TryWriteWithHostTools`、`TryWriteAppZipViaDitto`）与 `UnixLinks.HasExtendedAttributes`。
+  根因：只要载荷任一节点有任意 xattr 就弃托管写出器、改走 `ditto`/`tar`；macOS 对从下载来源 App（IDE、Claude 桌面 App 等）拉起的进程所建文件自动加 `com.apple.provenance`，且该属性受保护，`xattr -d` rc=0 但删不掉。
+  后果：在这类环境构建时产物失去确定性、symlink 表示改变；`ditto` 还把 `com.apple.provenance` 写进 zip 的 `__MACOSX/._*`，构建机来源信息随包分发。
+  复现：在 Claude 桌面 App 或 IDE 拉起的终端里跑 `ArchiveTests`/`ArchiveApiTests`（本机 4+2 例失败）；CI runner 无该属性不暴露。
+  建议解法：判定时忽略系统维护的跟踪类属性（`com.apple.provenance`、`com.apple.quarantine`、`com.apple.macl`、`com.apple.lastuseddate#PS`、`com.apple.metadata:kMDItemWhereFroms`、`com.apple.metadata:kMDItemDownloadedDate`），按属性名分类而非"有无"；宿主工具腿剔除这些属性需自写 AppleDouble 编码，`ditto` 无按属性过滤选项。
+- **K2 NSIS 在 C locale 宿主打包失败**：
+  位置：`src/Bundler.Nsis/NsisBundleBackend.cs`（`makensis` 调用，已传 `-INPUTCHARSET UTF8`）。
+  根因：POSIX 版 `makensis` 内部按当前 locale 做宽字符转换，C/POSIX locale 下遇非 ASCII 脚本报 "Bad text encoding"。
+  影响：Linux/macOS 宿主交叉打 NSIS 包、且环境未设 UTF-8 locale（Docker 容器默认如此）时失败。
+  复现：C locale 下跑 `NsisApiTests`（本机 5 例失败），`LANG=en_US.UTF-8` 下全过。
+  建议解法：后端给 `makensis` 子进程显式注入 UTF-8 locale（Linux `C.UTF-8`、macOS `en_US.UTF-8`），并加 C locale 回归腿。
+- **K3 NSIS 中断装钩位等待超时（偶发，根因未明）**：
+  位置：`tests/Integration/NsisIntegrationTests.cs` `InterruptedInstallManifestMismatchAndTamperRejections`（`HookWaitSeconds=300`）。
+  现象：windows-2025 腿两次未见钩位标记（verify `39368446045` 120s 窗口、`39962835463` attempt 1 的 300s 窗口），复跑均过；300s 仍未达说明不只是负载慢，疑似安装器被拦截或挂起（窗口内快照见 `smartscreen.exe`，未证实）。
+  取证缺口：CI 进程快照白名单不含被测安装器进程。
+  建议解法：先把被测安装器纳入快照白名单、超时时落安装器进程树与 NSIS 日志，取得现场再定性；不放宽断言。
+- **K4 macOS ≤26 ARM64 回落路径 `FD_CLOEXEC` 不落位**：
+  位置：`src/Bundler.Core/NativeSpawnUnix.cs` `CloExec`（`DllImport fcntl(int,int,int)`）。
+  根因：Apple ARM64 变参 ABI 把可变参数放栈上，非变参 P/Invoke 的第三参落寄存器，`F_SETFD` 收不到 `FD_CLOEXEC`。
+  影响：只在无 `pipe2` 的 macOS ≤26 ARM64 走回落路径时出现；本进程经 `NativeSpawnUnix` 拉起的子件由 `POSIX_SPAWN_CLOEXEC_DEFAULT` 兜底，宿主进程其他代码（如嵌入 `Bundler.Updater` 的应用自行 spawn）拉起的子件可继承管端；macOS 27+ 走 `pipe2` 不受影响。
+  证据：`NativeSpawnUnixTests.CreatePipeYieldsCloseOnExecEnds` 在该组合下按已登记残余 Skip；本机把 Darwin 旗标改回错误值强制回落时管端 `F_GETFD`=0。
+  建议解法：Apple ARM64 专用 `fcntl` 签名（6 个占位参数填满 x2–x7 使真实参数落栈），或改用原生 shim。
+- **K5 macOS 签名只接受"受信任"身份**：
+  位置：`src/Bundler.MacApp/MacSigningSupport.cs` `FindIdentityAsync`（`security find-identity -v -p codesigning`）。
+  现状：临时 keychain 导入的身份若信任链不成立（如自签证书，`CSSMERR_TP_NOT_TRUSTED`）即被 `-v` 排除，打包报 "No signing identity was found"。
+  实测：macOS 27 上 `codesign` 用同一不受信任身份按 SHA-1 签名 rc=0、`--verify` 通过——限制来自 Bundler 的身份筛选而非 `codesign`。
+  未决产品问题：是否允许不受信任身份（内部/测试分发需要稳定签名身份时有用；公开分发则 Gatekeeper 必拒）。
 - 仓外独立包消费 fixture（`tests/Fixtures/MsiPackage/`）的 `Fixture` 与 `Standalone/` 在仓内改项目引用后仍保留 `PackageReference`+`Bundler.LocalPackages.props`，
   作为已发布 nupkg 的还原来源、buildTransitive 注入与任务程序集进包契约的验收腿；
-  还原来源已由 packageSourceMapping 钉死本地源；
-  是否换处理方式（如公开发布后改验公网源、或移入独立验收仓）留待后续裁决。
-- 环境受限能力已登记 `docs/project/special-acceptance.md`：s390x/ppc64le `UnixFileTypes` PAL 可达性、Windows zip 符号链接还原、提权目录换装等。
+  还原来源已由 packageSourceMapping 钉死本地源。
+- 外部待验收项（生产签名/公证、真 Developer ID 签名门禁 SA-P-07、UAC/重启/干净宿主、quarantine 可写宿主、s390x/ppc64le PAL 等）统一登记在 `docs/project/special-acceptance.md`，均未执行。
 - 能力边界（有意不实现）：`DebPackageReader` 不解 GNU 长名/PAX——真实第三方 deb 样本解析非当前目标，规格已对齐。
 
 ## 6. 默认下一步
 
-全部格式、CLI 与 UPDATE 均已冻结并入 `main`，全功能面体检收口已完成。
-macOS 27 管道创建缺陷修复（PR #150）与 `.app` 签名门禁证据（PR #151）已合入，当前无进行中阶段。
-候选工作（均需用户授权后启动）：
-
-- §5 未决各项按用户认可顺序处置：Archive provenance → NSIS C locale → NSIS 中断装钩位超时（先补取证）→ ARM64 回落 `FD_CLOEXEC`；
-- 正式 `macos-27` runner 标签上线后把 macOS 27 并入 verify 六宿主矩阵；
-- 外部待验收项（统一登记在 `docs/project/special-acceptance.md`）；
-- 发布链资产实际推送（NuGet/Release 为另一步，仍需用户明确许可）；
-- `docs/project/roadmap.md` §4.2 候选增强队列当前为空，新增强按候选标准登记。
+无。
+项目已停止开发、不发布 NuGet 包，作为后继项目（计划在 GitHub 组织内分多个仓库重新实现）的参考资料保留。
+后继项目复用本仓设计前，先读 `docs/project/reference-notes.md`（可借鉴设计、已知缺陷、平台坑）与本文 §5，并优先评估是否有更好的方案。

@@ -1,6 +1,7 @@
 # DotNet.Bundler 产品边界与实施路线
 
-> 路线状态：全部格式（NSIS/MSI/`.app`/`.dmg`/`.pkg`/`.deb`/`.rpm`/`.AppImage`/`.zip`/`.tar.gz`/Alpine `.apk`）、CLI 与 UPDATE 自更新模块均已冻结并入 `main`，无进行中的格式阶段。
+> **路线已终止（2026-10-24）**：项目停止开发、转为参考资料，本文路线不再推进；后继项目见 [`reference-notes.md`](reference-notes.md)。
+> 终止时状态：全部格式（NSIS/MSI/`.app`/`.dmg`/`.pkg`/`.deb`/`.rpm`/`.AppImage`/`.zip`/`.tar.gz`/Alpine `.apk`）、CLI 与 UPDATE 自更新模块均已冻结并入 `main`，无进行中的格式阶段。
 > 剩余仅为各格式外部待验收项（统一登记在 [`docs/project/special-acceptance.md`](special-acceptance.md)）与 §4.2 候选增强队列。
 > 既有 per-machine、生产签名、交互 UI、干净宿主及重启等外部验收不阻塞新增功能开发，也不冒充已通过。
 

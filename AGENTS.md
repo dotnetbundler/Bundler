@@ -5,6 +5,9 @@
 
 ## 0. 一句话现状
 
+**本仓已停止开发，转为参考资料（2026-10-24 用户决定）**：不再开发新功能、不修复已知缺陷、不发布 NuGet 包；后继项目将在 GitHub 组织内分多个仓库重新实现。
+新会话或新 AI 接管时，除非用户明确要求，不要按下文流程启动任何阶段或修复；先读 `docs/project/reference-notes.md` 与 `PROJECT_CONTEXT.md` §5。
+
 `DotNet.Bundler` 是通用桌面打包工具，按"一次一个安装格式"推进。
 全部格式（NSIS/MSI/`.app`/`.dmg`/`.pkg`/`.deb`/`.rpm`/`.AppImage`/`.zip`/`.tar.gz`/Alpine `.apk`）、CLI 与 UPDATE 自更新模块均已冻结并入 `main`（冻结指功能面不再扩展；包版本以根 `Directory.Build.props` 的 `BundlerPackageVersion` 为准），当前无进行中的格式阶段。
 准确的当前阶段、包版本和下一步以 `PROJECT_CONTEXT.md` 文首为准——不要凭本文档或对话记忆判断现状。
@@ -96,6 +99,7 @@ git status --short
 | `tests/README.md` | 测试入口、门禁、组织与 fixture 地图 | 测试结果记录 |
 | `third_party/<tool>/*-provenance.md` | 第三方来源、许可、哈希核查 | 实现规则 |
 | `docs/project/special-acceptance.md` | 只能人工/外部付费完成的特殊验收与外部待办登记 | 可自动化腿、格式实现细节 |
+| `docs/project/reference-notes.md` | 给后继项目的参考：可借鉴设计、已知缺陷与过重之处、已实证平台坑、工程经验 | 当前事实、规则、分轮过程记录 |
 
 找不到该放哪的内容时，先停下来想它属于"AI 规则 / 项目规则 / 计划 / 当前事实 / 历史 / 某格式 / 用户文档 / 第三方"中的哪一类，再放进对应文件；都不合适时向用户说明再定，不新建语义重叠的文件。
 
