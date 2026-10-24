@@ -32,6 +32,7 @@
 | [`project/project-rules.md`](project/project-rules.md) | 产品与工程不变量 |
 | [`project/roadmap.md`](project/roadmap.md) | 产品边界、格式顺序、候选队列 |
 | [`project/special-acceptance.md`](project/special-acceptance.md) | 只能人工/外部付费完成的验收登记 |
+| [`project/reference-notes.md`](project/reference-notes.md) | 给后继项目的参考：可借鉴设计、已知缺陷、平台坑、工程经验（本仓已停止开发） |
 
 ## 目录外
 

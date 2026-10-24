@@ -1,5 +1,9 @@
 # DotNet.Bundler
 
+> **项目已停止开发，仅作参考资料保留**（2026-10-24）。
+> 不再开发新功能、不修复已知缺陷、不发布 NuGet 包；后继项目将在 GitHub 组织内分多个仓库重新实现。
+> 参考本仓前请先读 [`docs/project/reference-notes.md`](docs/project/reference-notes.md)（可借鉴设计、已知缺陷、平台坑）与 [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md) §5（已知缺陷 K1–K5）。
+
 `DotNet.Bundler` 是一个通用桌面应用打包工具。
 使用者引用包并配置少量 MSBuild 属性后，可以把 `dotnet publish` 产物转换为桌面安装程序；`bundler` CLI 与直接公共 API 复用同一套实现，为其他语言和构建系统提供入口。
 
@@ -15,7 +19,7 @@ bundler bundle --input-dir <publish目录>  # 或 CLI：只指发布目录，其
 
 ## 当前状态
 
-全部打包格式、CLI 与 UPDATE 自更新模块均已冻结（冻结=功能面不再扩展，缺陷修复照走）。
+全部打包格式、CLI 与 UPDATE 自更新模块均已冻结；项目已停止开发，已知缺陷只记录不修复（见 `PROJECT_CONTEXT.md` §5）。
 
 | 平台 | 格式 | 使用文档 | 契约文档 |
 | --- | --- | --- | --- |
